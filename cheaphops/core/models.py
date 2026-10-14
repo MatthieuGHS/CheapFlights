@@ -14,8 +14,8 @@ from pydantic import (
 )
 
 Iata = Annotated[str, StringConstraints(pattern=r"^[A-Z]{3}$")]
-# shortcut: refuse un TLD nu mais pas un suffixe public (co.uk, github.io) ; ajouter une liste
-# de suffixes publics quand le Pathfinder (phase 4) écrit des manifestes
+# shortcut: refuse un TLD nu mais pas un suffixe public (co.uk, github.io) ; en phase 4
+# (Pathfinder), valider via la Public Suffix List (tldextract), pas de liste maison
 Domain = Annotated[str, StringConstraints(pattern=r"^[a-z0-9-]+(\.[a-z0-9-]+)+$")]
 Currency = Annotated[str, StringConstraints(pattern=r"^[A-Z]{3}$")]
 Price = Annotated[Decimal, Field(ge=0)]
