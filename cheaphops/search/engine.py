@@ -1,0 +1,229 @@
+"""Recherche de bout en bout (§9) : Explore -> candidats -> Verify, sous budget de requêtes."""
+
+import sqlite3
+import uuid
+from collections.abc import Callable, Mapping
+from contextlib import AsyncExitStack
+from dataclasses import dataclass
+from datetime import UTC, date, datetime, timedelta
+from decimal import Decimal
+from typing import Any
+
+from cheaphops.core.config import Config, GroundConfig
+from cheaphops.core.ctx import Ctx, make_ctx
+from cheaphops.core.models import Manifest, SearchParams
+from cheaphops.fetch.http import CtxHttp, FetchFailed, SourceBlocked, Throttle
+from cheaphops.fetch.types import Transport
+from cheaphops.recipes.base import RecipeError
+from cheaphops.recipes.registry import LoadedRecipe, load
+from cheaphops.search.candidates import Candidate, Grid, candidates
+from cheaphops.search.fx import ECB, Fx
+from cheaphops.search.graph import assemble, chains
+from cheaphops.search.model import Quote, Segment, Trip
+from cheaphops.search.planner import Budget
+
+Event = dict[str, Any]
+Emit = Callable[[Event], None]
+TransportsFor = Callable[[Manifest], Mapping[int, Transport] | None]
+SOURCE_ERRORS = (FetchFailed, RecipeError)
+
+
+@dataclass(frozen=True)
+class SearchResult:
+    trips: list[Trip]
+    requests: int
+    budget_exhausted: bool
+    candidates: int
+    pruned: int
+
+
+def months(first: date, last: date) -> list[date]:
+    out, m = [], first.replace(day=1)
+    while m <= last:
+        out.append(m)
+        m = (m + timedelta(days=32)).replace(day=1)
+    return out
+
+
+@dataclass
+class _Source:
+    loaded: LoadedRecipe
+    ctx: Ctx
+    blocked: bool = False
+
+    @property
+    def name(self) -> str:
+        return self.loaded.manifest.source
+
+    def can(self, capability: str) -> bool:
+        return capability in self.loaded.manifest.capabilities
+
+
+async def run_search(
+    params: SearchParams,
+    config: Config,
+    ground: GroundConfig,
+    conn: sqlite3.Connection,
+    today: date,
+    emit: Emit = lambda e: None,
+    transports_for: TransportsFor = lambda m: None,
+    throttle: Throttle | None = None,
+) -> SearchResult:
+    run_id = uuid.uuid4().hex[:8]
+    throttle = throttle or Throttle()
+    sources = [
+        _Source(
+            lr,
+            make_ctx(
+                config, conn, lr.manifest, throttle, run_id, today, transports_for(lr.manifest)
+            ),
+        )
+        for lr in (load(name) for name in config.search.sources)
+    ]
+    fx_http = CtxHttp(conn, ECB, config.http, throttle, transports_for(ECB))
+    budget = Budget(config.search.request_budget, [*(s.ctx.http for s in sources), fx_http])
+    fx = Fx(fx_http)
+    async with AsyncExitStack() as stack:
+        for http in (*(s.ctx.http for s in sources), fx_http):
+            await stack.enter_async_context(http)
+        grid = await _explore(sources, params, budget, fx, emit)
+        timed = {s.name for s in sources if s.can("day_flights")}
+        keep = params.top_k * config.search.candidate_factor
+        slack = Decimal(str(config.search.bound_slack))
+        found, pruned = candidates(
+            grid, params, ground, slack, keep, timed, ground.metro.transfer_cost_eur
+        )
+        emit({"type": "candidates", "count": len(found), "pruned": pruned})
+        trips = await _verify(found, sources, params, config, fx, budget, emit)
+    emit({"type": "done", "trips": len(trips), "requests": budget.spent})
+    return SearchResult(trips, budget.spent, budget.exhausted, len(found), pruned)
+
+
+async def _guarded(src: _Source, emit: Emit, what: str, call: Any) -> Any:
+    """Une erreur de source n'arrête jamais la recherche : elle est signalée, la source continue
+    (ou s'arrête si elle est bloquée)."""
+    try:
+        return await call
+    except SourceBlocked as e:
+        src.blocked = True
+        emit({"type": "error", "source": src.name, "what": what, "error": str(e), "blocked": True})
+    except SOURCE_ERRORS as e:
+        emit({"type": "error", "source": src.name, "what": what, "error": str(e)})
+    return None
+
+
+async def _explore(
+    sources: list[_Source], params: SearchParams, budget: Budget, fx: Fx, emit: Emit
+) -> Grid:
+    grid: Grid = {}
+    out_months = months(params.date_from, params.date_to)
+    back_months = months(params.date_from, params.date_to + timedelta(days=params.max_nights))
+
+    async def add(src: _Source, o: str, d: str, month: date) -> None:
+        fares = await _guarded(
+            src, emit, f"calendar {o}-{d}", src.loaded.recipe.calendar(src.ctx, o, d, month)
+        )
+        for f in fares or []:
+            eur = await fx.to_eur(f.price, f.currency)
+            q = Quote(src.name, f.origin, f.destination, f.day, eur)
+            day_fares = grid.setdefault((f.origin, f.destination), {})
+            if f.day not in day_fares or eur < day_fares[f.day].price_eur:
+                day_fares[f.day] = q
+
+    for src in sources:
+        pairs: list[tuple[str, str]] = []
+        for o in params.origins:
+            dests = await _guarded(src, emit, f"routes {o}", src.loaded.recipe.routes(src.ctx, o))
+            pairs += [(o, d) for d in dests or [] if d not in params.origins]
+        served = {d: sum(1 for _, x in pairs if x == d) for _, d in pairs}
+        # shortcut: priorité aux destinations desservies depuis plusieurs origines (open-jaw),
+        # puis alphabétique ; l'historique des prix (ex-phase 5) donnerait un meilleur ordre
+        pairs.sort(key=lambda p: (-served[p[1]], p[1], p[0]))
+        emit({"type": "explore", "source": src.name, "routes": len(pairs)})
+        for i, (o, d) in enumerate(pairs):
+            if src.blocked or budget.exhausted:
+                emit({"type": "budget", "source": src.name, "explored": i, "of": len(pairs)})
+                break
+            for m in out_months:
+                await add(src, o, d, m)
+            for m in back_months:
+                await add(src, d, o, m)
+            emit(
+                {
+                    "type": "progress",
+                    "phase": "explore",
+                    "source": src.name,
+                    "done": i + 1,
+                    "of": len(pairs),
+                    "requests": budget.spent,
+                }
+            )
+    return grid
+
+
+async def _verify(
+    found: list[Candidate],
+    sources: list[_Source],
+    params: SearchParams,
+    config: Config,
+    fx: Fx,
+    budget: Budget,
+    emit: Emit,
+) -> list[Trip]:
+    """Vérifie les candidats par borne croissante ; s'arrête quand plus aucun ne peut entrer dans
+    le top-K (borne > K-ième score vérifié) ou quand le budget est épuisé."""
+    by_name = {s.name: s for s in sources}
+    flights: dict[tuple[str, str, str, date], list[Segment]] = {}
+    now = datetime.now(UTC)
+
+    async def segments(q: Quote) -> list[Segment]:
+        src = by_name[q.source]
+        url = src.loaded.recipe.booking_url(q.origin, q.destination, q.day)
+        if not src.can("day_flights"):
+            return [Segment(q.source, q.origin, q.destination, q.day, q.price_eur, booking_url=url)]
+        key = (q.source, q.origin, q.destination, q.day)
+        if key not in flights:
+            got = await _guarded(
+                src,
+                emit,
+                f"day_flights {q.origin}-{q.destination} {q.day}",
+                src.loaded.recipe.day_flights(src.ctx, q.origin, q.destination, q.day),
+            )
+            flights[key] = [
+                Segment(
+                    f.source, f.origin, f.destination, f.departure.date(),
+                    await fx.to_eur(f.price, f.currency),
+                    departure=f.departure, arrival=f.arrival, flight_no=f.flight_no,
+                    booking_url=url, fetched_at=now,
+                )
+                for f in got or [] if (f.origin, f.destination) == (q.origin, q.destination)
+            ]  # fmt: skip
+        return flights[key]
+
+    best: list[Trip] = []
+    for i, c in enumerate(sorted(found, key=lambda c: c.bound)):
+        if len(best) >= params.top_k and c.bound > best[params.top_k - 1].score:
+            break
+        if budget.exhausted:
+            emit({"type": "budget", "phase": "verify", "verified": i, "of": len(found)})
+            break
+        outs = chains([await segments(q) for q in c.out.quotes], params)
+        rets = chains([await segments(q) for q in c.ret.quotes], params)
+        options = [
+            t for o in outs for r in rets
+            if (t := assemble(o, r, c.ground, c.metro_cost, params, config.search.penalties))
+        ]  # fmt: skip
+        if options:
+            best = sorted([*best, min(options, key=lambda t: t.score)], key=lambda t: t.score)[
+                : params.top_k
+            ]
+        emit(
+            {
+                "type": "progress",
+                "phase": "verify",
+                "done": i + 1,
+                "of": len(found),
+                "requests": budget.spent,
+            }
+        )
+    return best
