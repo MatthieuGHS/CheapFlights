@@ -7,11 +7,13 @@ donne ses retours dans le même farechart que ses allers).
 """
 
 import asyncio
+import logging
 import random
 import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import date, timedelta
+from decimal import Decimal
 from typing import Any
 
 from ryanair import Ryanair
@@ -20,12 +22,14 @@ from cheaphops.core.config import Ground, LastMinute
 from cheaphops.lastminute import generic, sources
 from cheaphops.lastminute.fares import (
     Bus,
+    Calendar,
     Deal,
     Fare,
     RoundTrip,
     best_per_destination,
     bundled_roundtrips,
     by_destination,
+    calendar_for,
     cheapest_oneways,
     dedupe,
     roundtrips,
@@ -52,9 +56,64 @@ class Result:
     alternatives: dict[str, list[RoundTrip]]  # toutes les dates des destinations affichées
     deals: list[Deal]  # bons plans sans date
     bus: dict[str, Bus]  # bus depuis le domicile par aéroport d'origine (info)
+    calendars: dict[str, Calendar]  # prix par jour (aller et retour) des destinations affichées
     requests: int
     seconds: float
     sources: dict[str, SourceReport] = field(default_factory=dict)
+
+
+RESERVE_RETURNS = 20  # requêtes gardées pour les retours manquants
+log = logging.getLogger("cheaphops.lastminute")
+
+
+async def _none() -> list[Fare]:
+    return []
+
+
+def _kind(airline: str) -> str | None:
+    low = airline.lower()
+    return "ryanair" if "ryanair" in low else "wizzair" if "wizz" in low else None
+
+
+def _route(f: Fare, origins: set[str], kind: str) -> tuple[str, str, str] | None:
+    """Route normalisée (domicile, autre extrémité, compagnie) d'un vol, dans les deux sens."""
+    if f.origin in origins:
+        return (f.origin, f.destination, kind)
+    if f.destination in origins:
+        return (f.destination, f.origin, kind)
+    return None
+
+
+def _deal_route(d: Deal, kind: str) -> tuple[str, str, str]:
+    return (d.origin, d.destination, kind)
+
+
+def _targets(
+    pool: list[Fare], deals: list[Deal], origins: set[str]
+) -> dict[tuple[str, str, str], Decimal]:
+    """Routes Ryanair/Wizz vues par un agrégateur, avec le prix indicatif le plus bas. Les codes
+    ville de Kayak (MIL, LON…) échouent plus tard chez la compagnie et restent indicatifs."""
+    found: dict[tuple[str, str, str], Decimal] = {}
+    for f in pool:
+        kind = _kind(f.airline)
+        route = _route(f, origins, kind) if f.indicative and kind else None
+        if route and (route not in found or f.price < found[route]):
+            found[route] = f.price
+    for d in deals:
+        kind = _kind(d.airline or "")
+        if kind and d.origin in origins:
+            route = _deal_route(d, kind)
+            if route not in found or d.price < found[route]:
+                found[route] = d.price
+    return found
+
+
+def _months(d0: date, last: date) -> list[date]:
+    months, cur = [], d0.replace(day=1)
+    while cur <= last:
+        months.append(cur)
+        cur = (cur + timedelta(days=32)).replace(day=1)
+    return months
 
 
 def _in_window(d: Deal, d0: date, d1: date, cfg: LastMinute) -> bool:
@@ -167,6 +226,67 @@ async def run(
     last = d1 + timedelta(days=cfg.max_nights)
     # VNO et KUN forment une zone MAC chez Wizz : un même vol sort des deux farecharts
     pool = [f for f in dedupe([*ry, *wz, *gg, *web_fares]) if d0 <= f.day <= last]
+
+    # Vérification : les agrégateurs découvrent des routes, le prix vient de la compagnie.
+    # Pour chaque route Ryanair ou Wizz trouvée par un agrégateur, calendrier réel sur toute la
+    # fenêtre, dans les deux sens ; il remplace les prix de l'agrégateur.
+    dated_deals = [d for d in deals if d.day is not None and d.back is not None]
+    months = _months(d0, last)
+    ry_cost, wz_cost = 2 * len(months), windows + 1
+    used = sum(r.requests for r in reports.values())
+    targets = _targets(pool, dated_deals, origins)
+    todo: dict[str, list[tuple[str, str]]] = {"ryanair": [], "wizzair": []}
+    left = cfg.request_budget - used - RESERVE_RETURNS
+    for (home, other, kind), _price in sorted(targets.items(), key=lambda kv: kv[1]):
+        cost = ry_cost if kind == "ryanair" else wz_cost
+        if len(todo["ryanair"]) + len(todo["wizzair"]) >= cfg.verify_routes or cost > left:
+            continue
+        todo[kind].append((home, other))
+        left -= cost
+    verified: set[tuple[str, str, str]] = set()
+    verified_fares: list[Fare] = []
+
+    def ry_verify() -> tuple[list[Fare], int]:
+        fares, sent = [], 0
+        for home, other in todo["ryanair"]:
+            try:
+                for o, d in ((home, other), (other, home)):
+                    got, n_req = sources.ryanair_calendar(api, o, d, months, d0, last, pause)
+                    fares += got
+                    sent += n_req
+                    pause()
+            except Exception as e:
+                log.info("calendrier Ryanair %s-%s: %s", home, other, e)
+                continue
+            verified.add((home, other, "ryanair"))
+        return fares, sent
+
+    def wz_verify() -> tuple[list[Fare], int]:
+        routes = todo["wizzair"]
+        got, sent = sources.wizz(
+            cfg.origins, d0, d1, cfg.max_nights, len(routes), pause, rates, routes
+        )
+        verified.update((h, o, "wizzair") for h, o in routes)
+        return got, sent
+
+    vr, vw = await asyncio.gather(
+        call("ryanair", ry_verify) if todo["ryanair"] else _none(),
+        call("wizzair", wz_verify) if todo["wizzair"] else _none(),
+    )
+    verified_fares = [*vr, *vw]
+    if verified:
+        pool = [
+            f
+            for f in pool
+            if not (f.indicative and (k := _kind(f.airline)) and _route(f, origins, k) in verified)
+        ]
+        dated_deals = [
+            d
+            for d in dated_deals
+            if not ((k := _kind(d.airline or "")) and _deal_route(d, k) in verified)
+        ]
+        pool = dedupe([*pool, *verified_fares])
+        pool = [f for f in pool if d0 <= f.day <= last]
     outs = [f for f in pool if f.origin in origins and f.day <= d1]
     backs = [f for f in pool if f.destination in origins]
     for f in outs:
@@ -184,7 +304,7 @@ async def run(
         if f.destination not in origins and f.destination not in covered:
             cheapest.setdefault(f.destination, f)
     used = sum(r.requests for r in reports.values())
-    picks = [f for f in cheapest.values() if f.source != "wizzair"][
+    picks = [f for f in cheapest.values() if f.source != "wizzair" and not f.indicative][
         : max(cfg.request_budget - used, 0)
     ]
     if picks:
@@ -203,13 +323,16 @@ async def run(
         backs += await call("ryanair", ry_back)
 
     total = sum(r.requests for r in reports.values())
-    dated = [d for d in deals if d.day is not None and d.back is not None]
-    undated = {(d.origin, d.destination, d.price): d for d in deals if d not in dated}
+    dated = dated_deals
+    undated = {
+        (d.origin, d.destination, d.price): d for d in deals if d.day is None or d.back is None
+    }
     best_deals = sorted(undated.values(), key=lambda d: d.price)[: cfg.top]
     trips = roundtrips(outs, backs, cfg.max_nights, bus)
     trips += bundled_roundtrips(dated, origins, cfg.max_nights, bus)
     ranked = best_per_destination(trips)[: cfg.top]
     shown = {t.out.destination for t in ranked}
+    calendars = {dest: calendar_for(dest, pool, origins) for dest in shown}
     alternatives = {
         dest: group
         for dest, group in by_destination(trips, cfg.alternatives).items()
@@ -221,6 +344,7 @@ async def run(
         alternatives,
         best_deals,
         bus,
+        calendars,
         total,
         time.monotonic() - start,
         reports,

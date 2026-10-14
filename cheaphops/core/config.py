@@ -27,6 +27,7 @@ class LastMinute(Model):
     alternatives: Annotated[
         int, Field(ge=1)
     ]  # dates proposées par destination (option « tout voir »)
+    verify_routes: Annotated[int, Field(ge=0)]  # routes d'agrégateurs vérifiées chez la compagnie
     wizz_routes: Annotated[int, Field(ge=0)]  # routes Wizz dont on lit le farechart
     pause_s: tuple[float, float]  # pause aléatoire entre deux requêtes d'une même source
     request_budget: Annotated[int, Field(ge=1)]

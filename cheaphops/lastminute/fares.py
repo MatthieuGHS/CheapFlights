@@ -30,6 +30,7 @@ class Fare:
     price: Decimal  # EUR
     flight_no: str | None
     url: str | None
+    indicative: bool = False  # prix d'un agrégateur, non vérifié chez la compagnie
 
     @property
     def day(self) -> date:
@@ -50,6 +51,7 @@ class Deal:
     day: date | None = None  # départ, quand la source le donne
     back: date | None = None  # retour
     airline: str | None = None
+    indicative: bool = True  # un bon plan est toujours un prix d'agrégateur
 
 
 @dataclass(frozen=True)
@@ -66,6 +68,11 @@ class RoundTrip:
     @property
     def nights(self) -> int:
         return (self.back.day - self.out.day).days
+
+    @property
+    def indicative(self) -> bool:
+        """Vrai si un des deux billets n'est pas vérifié chez la compagnie."""
+        return self.out.indicative or self.back.indicative
 
 
 def _bus(ground: Ground, start: str, end: str) -> Bus:
@@ -136,7 +143,7 @@ def bundled_roundtrips(
         )
         back_day = datetime.combine(d.back, datetime.min.time())
         back = Fare(d.source, d.airline or d.source, d.destination, d.origin, back_day,
-                    Decimal(0), None, d.url)  # fmt: skip
+                    Decimal(0), None, d.url, d.indicative)  # fmt: skip
         trips.append(RoundTrip(out, back, _bus(ground, d.origin, d.origin), bundled=True))
     return trips
 
@@ -157,3 +164,42 @@ def by_destination(trips: list[RoundTrip], per: int) -> dict[str, list[RoundTrip
         if len(group) < per:
             group.append(t)
     return groups
+
+
+def best_per_route(fares: list[Fare]) -> list[Fare]:
+    """Le moins cher par (origine, destination), toutes dates confondues, trié par prix."""
+    best: dict[tuple[str, str], Fare] = {}
+    for f in sorted(fares, key=lambda f: (f.price, f.departure)):
+        best.setdefault((f.origin, f.destination), f)
+    return sorted(best.values(), key=lambda f: (f.price, f.departure))
+
+
+@dataclass(frozen=True)
+class Cell:
+    day: date
+    price: Decimal
+    origin: str  # aéroport de départ du vol le moins cher ce jour-là
+    indicative: bool
+
+
+@dataclass(frozen=True)
+class Calendar:
+    """Prix par jour vers (aller) et depuis (retour) une destination, pour le mini-calendrier."""
+
+    out: list[Cell]
+    back: list[Cell]
+
+
+def calendar_for(destination: str, fares: list[Fare], origins: set[str]) -> Calendar:
+    def cells(legs: list[Fare], key_origin: bool) -> list[Cell]:
+        best: dict[date, Fare] = {}
+        for f in sorted(legs, key=lambda f: f.price):
+            best.setdefault(f.day, f)
+        return [
+            Cell(d, f.price, f.origin if key_origin else f.destination, f.indicative)
+            for d, f in sorted(best.items())
+        ]
+
+    outs = [f for f in fares if f.destination == destination and f.origin in origins]
+    backs = [f for f in fares if f.origin == destination and f.destination in origins]
+    return Calendar(cells(outs, True), cells(backs, False))

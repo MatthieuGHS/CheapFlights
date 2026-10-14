@@ -1,5 +1,6 @@
 import asyncio
 import json
+from dataclasses import replace
 from datetime import date, datetime, timedelta
 from decimal import Decimal
 from types import SimpleNamespace
@@ -346,3 +347,40 @@ def test_dedupe_keeps_the_timed_version_of_the_same_flight() -> None:
     other = fare("VNO", "TLL", "2026-11-06", "24.99", hour=0, src="wizzair")
     assert dedupe([day_only, timed, other]) == [timed, other]
     assert dedupe([timed, day_only]) == [timed]
+
+
+def test_aggregator_routes_are_verified_at_the_airline_and_replaced(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    cfg = load_config().lastminute.model_copy(update={"pause_s": (0, 0), "days": 10})
+    cfg = cfg.model_copy(update={"google": cfg.google.model_copy(update={"enabled": True})})
+    asked: list[tuple[str, str]] = []
+
+    def agg(*a):  # type: ignore[no-untyped-def]
+        # l'agrégateur voit VNO-KRK chez Ryanair (cher) et VNO-OSL chez Norwegian (invérifiable)
+        ryr = fare("VNO", "KRK", "2026-10-16", "60", src="google")
+        osl = fare("VNO", "OSL", "2026-10-16", "50", src="google")
+        return [replace(ryr, airline="Ryanair", indicative=True),
+                replace(osl, airline="Norwegian", indicative=True)], 2  # fmt: skip
+
+    def calendar(api, o, d, months, d0, last, pause):  # type: ignore[no-untyped-def]
+        asked.append((o, d))
+        day = "2026-10-18" if o == "VNO" else "2026-10-20"
+        return [fare(o, d, day, "19" if o == "VNO" else "17")], 1
+
+    monkeypatch.setattr(sources, "ryanair", lambda api, o, d0, d1: [])
+    monkeypatch.setattr(sources, "wizz", lambda *a, **k: ([], 1))
+    monkeypatch.setattr(sources, "google", agg)
+    monkeypatch.setattr(sources, "ryanair_calendar", calendar)
+    monkeypatch.setattr(generic, "load_sources", lambda: [])
+    monkeypatch.setattr(run_mod, "Ryanair", lambda currency: SimpleNamespace(num_queries=0))
+    ground = Ground.model_validate({"home": "VNO", "buses": {}})
+
+    r = asyncio.run(run_mod.run(cfg, ground, date(2026, 10, 14), fx=FX))
+    assert asked == [("VNO", "KRK"), ("KRK", "VNO")]  # les deux sens, Norwegian ignorée
+    krk = next(t for t in r.roundtrips if t.out.destination == "KRK")
+    assert (krk.total, krk.indicative) == (Decimal(36), False)  # 19 + 17 réels, pas 60
+    assert not any(f.price == 60 for f in r.oneways)
+    osl = next(f for f in r.oneways if f.destination == "OSL")
+    assert osl.indicative  # non vérifiable : conservé, badge indicatif
+    cal = r.calendars["KRK"]
+    assert [(c.day.isoformat(), c.price) for c in cal.out] == [("2026-10-18", Decimal(19))]
+    assert [(c.day.isoformat(), c.price) for c in cal.back] == [("2026-10-20", Decimal(17))]

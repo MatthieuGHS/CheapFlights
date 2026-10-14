@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import type { Bus, Fare, Result, RoundTrip } from './api'
+import type { Bus, Calendar, Fare, Result, RoundTrip } from './api'
 
 const when = (f: Fare) => {
   const d = new Date(f.departure)
@@ -10,10 +10,20 @@ const when = (f: Fare) => {
     : `${day} ${d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}`
 }
 
+const Badge = ({ indicative }: { indicative: boolean }) => (
+  <span
+    className={`ml-1 rounded px-1.5 py-0.5 text-xs ${indicative ? 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-100' : 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-100'}`}
+    title={indicative ? "Prix d'un agrégateur, non vérifié chez la compagnie" : 'Prix lu chez la compagnie'}
+  >
+    {indicative ? 'prix indicatif' : 'vérifié'}
+  </span>
+)
+
 const Leg = ({ f }: { f: Fare }) => (
   <span>
     {f.origin}→{f.destination} · {when(f)} · {f.airline}{' '}
     <span className="text-stone-500">[{f.source}]</span>
+    <Badge indicative={f.indicative} />
     {f.url && (
       <>
         {' '}
@@ -36,10 +46,60 @@ const BusInfo = ({ b }: { b: Bus }) =>
 const nights = (t: RoundTrip) =>
   Math.round((Date.parse(t.back.departure.slice(0, 10)) - Date.parse(t.out.departure.slice(0, 10))) / 864e5)
 
+/** Prix par jour, aller (ligne du haut) et retour : le moins cher en vert. */
+function MiniCalendar({ cal }: { cal: Calendar }) {
+  const cells = [...cal.out, ...cal.back]
+  if (cells.length === 0) return null
+  const days: string[] = []
+  const start = new Date(cells.map((c) => c.day).sort()[0]!)
+  const end = new Date(cells.map((c) => c.day).sort().at(-1)!)
+  for (let d = start; d <= end; d = new Date(d.getTime() + 864e5)) days.push(d.toISOString().slice(0, 10))
+  const cheapest = Math.min(...cells.map((c) => c.price))
+  const row = (label: string, list: Calendar['out']) => (
+    <tr>
+      <th className="pr-2 text-left font-normal text-stone-500">{label}</th>
+      {days.map((d) => {
+        const c = list.find((x) => x.day === d)
+        const cheap = c !== undefined && c.price <= cheapest * 1.25
+        return (
+          <td
+            key={d}
+            title={c ? `${c.origin} · ${c.indicative ? 'indicatif' : 'vérifié'}` : 'aucun vol'}
+            className={`px-1 text-center ${c ? (cheap ? 'bg-emerald-100 dark:bg-emerald-900' : '') : 'text-stone-300'} ${c?.indicative ? 'italic' : ''}`}
+          >
+            {c ? c.price.toFixed(0) : '·'}
+          </td>
+        )
+      })}
+    </tr>
+  )
+  return (
+    <div className="mt-2 overflow-x-auto text-xs">
+      <table>
+        <thead>
+          <tr>
+            <th />
+            {days.map((d) => (
+              <th key={d} className="px-1 font-normal text-stone-500">
+                {d.slice(8)}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {row('aller', cal.out)}
+          {row('retour', cal.back)}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
 function Trip({ t }: { t: RoundTrip }) {
   return (
     <>
       <strong>{total(t).toFixed(2)} €</strong> vols · {nights(t)} nuit{nights(t) > 1 ? 's' : ''}
+      <Badge indicative={t.out.indicative || t.back.indicative} />
       <span className="ml-3 text-sm">
         <BusInfo b={t.bus} />
       </span>
@@ -104,6 +164,9 @@ export function Results({ result }: { result: Result }) {
             {result.roundtrips.map((t) => (
               <li key={t.out.destination} className="rounded border border-stone-300 p-3 dark:border-stone-700">
                 <Trip t={t} />
+                {result.calendars[t.out.destination] && (
+                  <MiniCalendar cal={result.calendars[t.out.destination]!} />
+                )}
                 {allDates && (result.alternatives[t.out.destination] ?? []).length > 1 && (
                   <ul className="mt-2 space-y-1 border-t border-stone-200 pt-2 text-sm dark:border-stone-800">
                     {result.alternatives[t.out.destination]!.slice(1).map((a) => (
@@ -154,7 +217,8 @@ export function Results({ result }: { result: Result }) {
         <ul className="space-y-1 text-sm">
           {result.deals.map((d) => (
             <li key={d.url}>
-              <strong>{d.price.toFixed(0)} €</strong> · {d.origin}→{d.destination} ·{' '}
+              <strong>{d.price.toFixed(0)} €</strong> <Badge indicative={d.indicative} /> · {d.origin}→
+              {d.destination} ·{' '}
               <a href={d.url} target="_blank" rel="noreferrer" className="underline">
                 {d.source}
               </a>

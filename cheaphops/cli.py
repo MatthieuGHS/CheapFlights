@@ -7,14 +7,14 @@ from datetime import date
 
 from cheaphops.core.config import load_config, load_ground
 from cheaphops.core.log import setup_logging
-from cheaphops.lastminute.fares import Fare, RoundTrip
+from cheaphops.lastminute.fares import Fare, RoundTrip, best_per_route
 from cheaphops.lastminute.run import Result, run
 
 
 def _fare(f: Fare) -> str:
     fmt = "%a %d/%m" if f.source == "wizzair" else "%a %d/%m %H:%M"  # Wizz : prix au jour
     line = f"{f.origin}->{f.destination} {f.departure.strftime(fmt)} {f.airline} {f.price} €"
-    return f"{line} [{f.source}]"
+    return f"{line} [{f.source}, {'indicatif' if f.indicative else 'vérifié'}]"
 
 
 def render(r: Result, top: int = 10, all_dates: bool = False) -> str:
@@ -34,8 +34,8 @@ def render(r: Result, top: int = 10, all_dates: bool = False) -> str:
             ]
     if not r.roundtrips:
         lines.append("  (aucun)")
-    lines.append(f"Top {top} allers simples :")
-    lines += [f"  {_fare(f)}" for f in r.oneways[:top]]
+    lines.append(f"Top {top} allers simples (meilleure date par route) :")
+    lines += [f"  {_fare(f)}" for f in best_per_route(r.oneways)[:top]]
     if r.deals:
         lines.append("Bons plans (aller-retour, dates si connues) :")
         lines += [

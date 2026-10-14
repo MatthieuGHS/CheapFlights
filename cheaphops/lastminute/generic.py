@@ -79,6 +79,8 @@ class Source(BaseModel):
     adaptive: bool = False
     cities: dict[str, str] = {}
     date_format: str | None = None
+    # agrégateur ou bon plan : prix indicatif, à vérifier chez la compagnie (teztour : vendeur)
+    indicative: bool = True
     crawl: Crawl | None = None
     extract: Selectors | Rss | JsonTap
 
@@ -151,10 +153,23 @@ def _add_match(
         with contextlib.suppress(ValueError):
             when = dt.datetime.strptime(stamp, src.date_format)
             airline = (groups.get("airline") or src.name).strip()
-            fares.append(Fare(src.name, airline, origin, destination, when, eur, None, row["url"]))
+            fares.append(
+                Fare(
+                    src.name,
+                    airline,
+                    origin,
+                    destination,
+                    when,
+                    eur,
+                    None,
+                    row["url"],
+                    src.indicative,
+                )
+            )
     else:
         title = row["title"].strip()
-        deals.append(Deal(src.name, title, origin, destination, eur, row["url"]))
+        deals.append(Deal(src.name, title, origin, destination, eur, row["url"], None, None,
+                          None, None, src.indicative))  # fmt: skip
 
 
 def deals_from_json(src: Source, payload: Any, fx: Fx) -> list[Deal]:
@@ -181,7 +196,7 @@ def deals_from_json(src: Source, payload: Any, fx: Fx) -> list[Deal]:
         deals.append(Deal(
             src.name, f"{origin} -> {got.get('destination')}", origin, str(got.get("destination")),
             eur, urljoin(src.urls[0], str(got["url"])), when and str(when), days[0], days[1],
-            str(got["airline"]) if got.get("airline") else None,
+            str(got["airline"]) if got.get("airline") else None, src.indicative,
         ))  # fmt: skip
     return deals
 

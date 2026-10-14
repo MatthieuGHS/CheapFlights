@@ -22,6 +22,7 @@ const Fare = z.object({
   price: z.number(),
   flight_no: z.string().nullable(),
   url: z.string().nullable(),
+  indicative: z.boolean(),
 })
 export type Fare = z.infer<typeof Fare>
 
@@ -36,6 +37,10 @@ export const RoundTrip = z.object({
 })
 export type RoundTrip = z.infer<typeof RoundTrip>
 
+const Cell = z.object({ day: z.string(), price: z.number(), origin: z.string(), indicative: z.boolean() })
+const Calendar = z.object({ out: z.array(Cell), back: z.array(Cell) })
+export type Calendar = z.infer<typeof Calendar>
+
 const Result = z.object({
   oneways: z.array(Fare),
   deals: z.array(
@@ -48,11 +53,13 @@ const Result = z.object({
       url: z.string(),
       when: z.string().nullable(),
       airline: z.string().nullable(),
+      indicative: z.boolean(),
     }),
   ),
   roundtrips: z.array(RoundTrip),
   alternatives: z.record(z.string(), z.array(RoundTrip)),
   bus: z.record(z.string(), Bus),
+  calendars: z.record(z.string(), Calendar),
   requests: z.number(),
   seconds: z.number(),
   sources: z.record(

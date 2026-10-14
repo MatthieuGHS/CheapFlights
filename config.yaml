@@ -11,9 +11,10 @@ lastminute:
   optional_origins: [WAW, GDN, TLL]   # ajoutées avec --origins ; bus depuis Vilnius dans ground.yaml
   oneways_max: 300         # allers simples gardés (vue UI avec filtre de prix)
   alternatives: 10         # dates proposées par destination pour « toutes les dates »
+  verify_routes: 30        # routes trouvées par un agrégateur dont le calendrier est lu chez Ryanair/Wizz
   wizz_routes: 30          # routes Wizz dont on lit les prix par jour (farechart, 1 POST chacune)
   pause_s: [0.3, 0.9]      # pause aléatoire entre deux requêtes d'une même source
-  request_budget: 150      # requêtes réseau max par recherche, toutes sources
+  request_budget: 320      # requêtes réseau max par recherche, toutes sources
   google:                  # complément : compagnies que Ryanair/Wizz ne couvrent pas
     enabled: false         # --google (CLI) ou case à cocher (UI) pour l'activer
     destinations: [WAW, CPH, HEL, FRA]

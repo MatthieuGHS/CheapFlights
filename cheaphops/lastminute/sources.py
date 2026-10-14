@@ -32,6 +32,35 @@ def ryanair(api: Any, airport: str, d0: dt.date, d1: dt.date) -> list[Fare]:
             if f.currency == "EUR"]  # fmt: skip
 
 
+def ryanair_calendar(
+    api: Any, o: str, d: str, months: list[dt.date], d0: dt.date, last: dt.date, pause: Pause
+) -> tuple[list[Fare], int]:
+    """Prix par jour de la route o -> d (farfnd `cheapestPerDay`, une requête par mois), jours
+    complets ou indisponibles écartés. Prix réels de la compagnie, avec l'heure du vol."""
+    fares: list[Fare] = []
+    for i, month in enumerate(months):
+        if i:
+            pause()
+        r = api.session.get(
+            f"https://services-api.ryanair.com/farfnd/v4/oneWayFares/{o}/{d}/cheapestPerDay",
+            params={"outboundMonthOfDate": month.isoformat(), "currency": "EUR"},
+        )
+        r.raise_for_status()
+        for x in r.json()["outbound"]["fares"] or []:
+            if x["soldOut"] or x["unavailable"] or x["price"]["currencyCode"] != "EUR":
+                continue
+            when = dt.datetime.fromisoformat(x["departureDate"])
+            if d0 <= when.date() <= last:
+                day = when.date().isoformat()
+                fares.append(Fare(
+                    "ryanair", "Ryanair", o, d, when, Decimal(str(x["price"]["value"])), None,
+                    "https://www.ryanair.com/gb/en/trip/flights/select?adults=1&teens=0"
+                    f"&children=0&infants=0&isReturn=false&dateOut={day}&originIata={o}"
+                    f"&destinationIata={d}",
+                ))  # fmt: skip
+    return fares, len(months)
+
+
 def _ryanair_fare(f: Any) -> Fare:
     day = f.departureTime.date().isoformat()
     return Fare(
@@ -50,6 +79,7 @@ def wizz(
     max_routes: int,
     pause: Pause,
     fx: Fx,
+    routes: list[tuple[str, str]] | None = None,
 ) -> tuple[list[Fare], int]:
     """Depuis le contexte d'une page Wizz (Kasada accepte le headless furtif de Scrapling) :
     1. SmartSearchCheapFlightsV2 par origine : les destinations desservies (une requête chacune) ;
@@ -92,8 +122,8 @@ def wizz(
         return ""
 
     def act(page: Any) -> Any:
-        routes: dict[tuple[str, str], Decimal] = {}
-        for o in origins:
+        known: dict[tuple[str, str], Decimal] = {}
+        for o in [] if routes is not None else origins:
             body = {
                 "departureStations": [o], "arrivalStations": None, "stdPlan": None,
                 "isReturnFlight": False, "tripDuration": "1 week", "pax": 1,
@@ -102,8 +132,9 @@ def wizz(
             found = parse_wizz(post(page, "/search/SmartSearchCheapFlightsV2", body), fx)
             fares.extend(found)
             for f in found:
-                routes[(o, f.destination)] = f.price
-        cheapest = sorted(routes, key=lambda r: routes[r])[:max_routes]
+                known[(o, f.destination)] = f.price
+        cheapest = routes if routes is not None else sorted(known, key=lambda r: known[r])
+        cheapest = cheapest[:max_routes]
         center = d0 + dt.timedelta(days=FARECHART_RADIUS)
         while cheapest and center - dt.timedelta(days=FARECHART_RADIUS) <= d1 + dt.timedelta(
             nights
@@ -222,4 +253,4 @@ def _google_fare(r: Any, o: str, d: str, url: str) -> Fare | None:
         return None
     dep = r.flights[0].departure
     when = dt.datetime(*dep.date, *dep.time)
-    return Fare("google", airline, o, d, when, Decimal(r.price), None, url)
+    return Fare("google", airline, o, d, when, Decimal(r.price), None, url, True)
