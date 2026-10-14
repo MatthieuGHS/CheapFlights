@@ -20,6 +20,7 @@ from ryanair import Ryanair
 from cheaphops.core.config import Ground, LastMinute
 from cheaphops.lastminute import generic, sources
 from cheaphops.lastminute.fares import Deal, Fare, RoundTrip, cheapest_oneways, roundtrips
+from cheaphops.lastminute.fx import Fx, load_fx
 
 Emit = Callable[[dict[str, Any]], None]
 
@@ -31,6 +32,7 @@ class SourceReport:
     in_window: int = 0  # tarifs dont le départ tombe dans J+0..J+N
     seconds: float = 0.0
     error: str | None = None
+    mode: str | None = None  # mode Scrapling qui a livré (sources YAML)
 
 
 @dataclass
@@ -48,12 +50,20 @@ def _sample(d0: date, d1: date, n: int) -> list[date]:
     return sorted({d0 + timedelta(days=round(i * span / max(n - 1, 1))) for i in range(n)})
 
 
-async def run(cfg: LastMinute, ground: Ground, today: date, emit: Emit = lambda e: None) -> Result:
+async def run(
+    cfg: LastMinute,
+    ground: Ground,
+    today: date,
+    emit: Emit = lambda e: None,
+    fx: Fx | None = None,
+) -> Result:
     start = time.monotonic()
     d0, d1 = today, today + timedelta(days=cfg.days)
     origins = set(cfg.origins)
     bus = {o: ground.cost(o) for o in origins}
     reports: dict[str, SourceReport] = {}
+    modes: dict[str, str] = {}
+    rates: Fx = fx or await asyncio.to_thread(load_fx)
 
     def pause() -> None:  # appelé depuis les threads des sources : time.sleep ne bloque que le leur
         time.sleep(random.uniform(*cfg.pause_s))
@@ -73,40 +83,56 @@ async def run(cfg: LastMinute, ground: Ground, today: date, emit: Emit = lambda 
         return items
 
     # Budget : Ryanair et Wizz d'abord (leur coût est connu), Google prend ce qu'il reste en
-    # gardant de la place pour les retours
+    # gardant de la place pour les retours ; les routes Wizz se réduisent si la période est longue
     n = len(cfg.origins)
-    fixed = n + (1 + n + cfg.wizz_routes * -(-(cfg.days + cfg.max_nights + 1) // 19)) + 20
-    g_left = max(cfg.request_budget - fixed, 0)
+    span = cfg.days + cfg.max_nights + 1
+    windows = -(-span // (2 * sources.FARECHART_RADIUS + 1))
+    slices = -(-(cfg.days + 1) // sources.RYANAIR_SLICE_DAYS)
+    returns = 25
+    room = cfg.request_budget - n * slices - returns - (1 + n)
+    wizz_routes = max(min(cfg.wizz_routes, room // windows), 0)
     g_dests, g_dates = cfg.google.destinations, cfg.google.dates
+    g_left = room - wizz_routes * windows if cfg.google.enabled else 0
     while n * len(g_dests) * g_dates > g_left and g_dates > 1:
         g_dates -= 1
-    g_dests = g_dests[: g_left // max(n * g_dates, 1)]
+    g_dests = g_dests[: max(g_left, 0) // max(n * g_dates, 1)]
 
     api = Ryanair(currency="EUR")
 
     def ry_out() -> tuple[list[Fare], int]:
-        fares = []
-        for i, o in enumerate(cfg.origins):
-            if i:
-                pause()
-            fares += sources.ryanair(api, o, d0, d1)
+        fares, first = [], True
+        for o in cfg.origins:
+            for lo in range(0, cfg.days + 1, sources.RYANAIR_SLICE_DAYS):
+                if not first:
+                    pause()
+                first = False
+                hi = min(lo + sources.RYANAIR_SLICE_DAYS - 1, cfg.days)
+                fares += sources.ryanair(api, o, d0 + timedelta(lo), d0 + timedelta(hi))
         return fares, api.num_queries
 
-    def web() -> tuple[list[Deal], int]:
-        deals, sent = [], 0
+    async def web_all() -> list[Deal]:
+        """Sources YAML : une à la fois (chacune peut ouvrir un navigateur)."""
+        deals: list[Deal] = []
         for src in generic.load_sources():
-            got, n_pages = generic.fetch_source(src, pause)
+
+            def one(src: generic.Source = src) -> tuple[list[Deal], int]:
+                got, pages, mode = generic.fetch_source(src, pause, rates)
+                modes[src.name] = mode
+                return got, pages
+
+            got = await call(f"web:{src.name}", one)
+            if src.name in modes:
+                reports[f"web:{src.name}"].mode = modes[src.name]
             deals += [d for d in got if d.origin in origins]
-            sent += n_pages
-        return deals, sent
+        return deals
 
     ry, wz, gg, deals = await asyncio.gather(
         call("ryanair", ry_out),
         call("wizzair", lambda: sources.wizz(
-            cfg.origins, d0, d1, cfg.max_nights, cfg.wizz_routes, pause)),
+            cfg.origins, d0, d1, cfg.max_nights, wizz_routes, pause, rates)),
         call("google", lambda: sources.google(
-            cfg.origins, g_dests, _sample(d0, d1, g_dates), pause)),
-        call("web", web),
+            cfg.origins, g_dests, _sample(d0, d1, g_dates), pause) if g_dests else ([], 0)),
+        web_all(),
     )  # fmt: skip
     last = d1 + timedelta(days=cfg.max_nights)
     # VNO et KUN forment une zone MAC chez Wizz : un même vol sort des deux farecharts

@@ -9,6 +9,7 @@ from cheaphops.core.models import Iata, Model, Price
 
 
 class Google(Model):
+    enabled: bool  # désactivé par défaut : 24+ requêtes pour un échantillon de hubs
     """Google Flights ne sait pas « partir vers n'importe où » : une requête = un aller simple
     origine -> destination à une date. On échantillonne donc des destinations de hubs."""
 
@@ -18,7 +19,7 @@ class Google(Model):
 
 class LastMinute(Model):
     origins: Annotated[list[Iata], Field(min_length=1)]
-    days: Annotated[int, Field(ge=0)]  # départs de J+0 à J+days
+    days: Annotated[int, Field(ge=0, le=60)]  # départs de J+0 à J+days
     max_nights: Annotated[int, Field(ge=0)]
     top: Annotated[int, Field(ge=1)]
     optional_origins: list[Iata]  # villes voisines, avec bus depuis le domicile (ground.yaml)

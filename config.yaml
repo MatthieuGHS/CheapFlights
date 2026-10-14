@@ -5,7 +5,7 @@ log_level: INFO
 
 lastminute:
   origins: [VNO, KUN, RIX]
-  days: 10                 # départs de J+0 à J+10
+  days: 10                 # départs de J+0 à J+days (60 max)
   max_nights: 3
   top: 30                  # lignes affichées par tableau
   optional_origins: [WAW, GDN, TLL]   # ajoutées avec --origins ; bus depuis Vilnius dans ground.yaml
@@ -14,5 +14,6 @@ lastminute:
   pause_s: [0.3, 0.9]      # pause aléatoire entre deux requêtes d'une même source
   request_budget: 150      # requêtes réseau max par recherche, toutes sources
   google:                  # complément : compagnies que Ryanair/Wizz ne couvrent pas
+    enabled: false         # --google (CLI) ou case à cocher (UI) pour l'activer
     destinations: [WAW, CPH, HEL, FRA]
     dates: 2               # origines x destinations x dates = requêtes

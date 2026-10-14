@@ -7,6 +7,7 @@ export default function App() {
   const [days, setDays] = useState(10)
   const [nights, setNights] = useState(3)
   const [origins, setOrigins] = useState('')
+  const [google, setGoogle] = useState(false)
   const [runId, setRunId] = useState<string | null>(null)
   const [events, setEvents] = useState<SearchEvent[]>([])
   const [status, setStatus] = useState<Status | null>(null)
@@ -19,6 +20,7 @@ export default function App() {
         setDays(c.days)
         setNights(c.max_nights)
         setOrigins(c.origins.join(','))
+        setGoogle(c.google.enabled)
       })
       .catch((e: unknown) => setError(String(e)))
   }, [])
@@ -39,7 +41,7 @@ export default function App() {
     setEvents([])
     setStatus(null)
     setError(null)
-    startSearch({ days, max_nights: nights, origins: origins.split(',').map((s) => s.trim().toUpperCase()) })
+    startSearch({ days, max_nights: nights, google, origins: origins.split(',').map((s) => s.trim().toUpperCase()) })
       .then((r) => setRunId(r.id))
       .catch((e: unknown) => setError(String(e)))
   }
@@ -56,7 +58,7 @@ export default function App() {
       >
         <label>
           Départs de J+0 à J+
-          <input type="number" min={0} value={days} onChange={(e) => setDays(+e.target.value)} className="ml-1 w-16 rounded border px-2 py-1" />
+          <input type="number" min={0} max={60} value={days} onChange={(e) => setDays(+e.target.value)} className="ml-1 w-16 rounded border px-2 py-1" />
         </label>
         <label>
           Nuits max
@@ -66,6 +68,9 @@ export default function App() {
           Origines
           <input value={origins} onChange={(e) => setOrigins(e.target.value)} className="ml-1 w-40 rounded border px-2 py-1" />
           {config && <span className="ml-1 text-stone-500">optionnels : {config.optional_origins.join(', ')}</span>}
+        </label>
+        <label>
+          <input type="checkbox" checked={google} onChange={(e) => setGoogle(e.target.checked)} /> Google Flights
         </label>
         <button disabled={running || !config} className="rounded bg-stone-900 px-4 py-1.5 text-white disabled:opacity-50 dark:bg-stone-100 dark:text-stone-900">
           {running ? 'Recherche…' : 'Chercher'}

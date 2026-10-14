@@ -4,16 +4,19 @@ sont) et renvoie (tarifs, requêtes envoyées) ; `run` les lance dans des thread
 import datetime as dt
 import json
 import logging
+import re
 from collections.abc import Callable
 from decimal import Decimal
 from typing import Any
 
 from cheaphops.lastminute.fares import Fare
+from cheaphops.lastminute.fx import Fx
 
 log = logging.getLogger("cheaphops.lastminute")
-WIZZ_API = "https://be.wizzair.com/29.20.1/Api"
+API_VERSION = re.compile(r"be\.wizzair\.com\\?/(\d+\.\d+\.\d+)")
 FARECHART_RADIUS = 9  # farechart renvoie ±9 jours autour de la date demandée
 Pause = Callable[[], None]
+RYANAIR_SLICE_DAYS = 10  # oneWayFares ne renvoie que le moins cher par destination sur la plage
 WIZZ_HOME = "https://www.wizzair.com/en-gb"
 # shortcut: cookie de consentement figé (valeur publique), Google renvoie sinon la page de
 # consentement UE ; à régénérer si fast-flights se met à lever IndexError partout
@@ -40,7 +43,13 @@ def _ryanair_fare(f: Any) -> Fare:
 
 
 def wizz(
-    origins: list[str], d0: dt.date, d1: dt.date, nights: int, max_routes: int, pause: Pause
+    origins: list[str],
+    d0: dt.date,
+    d1: dt.date,
+    nights: int,
+    max_routes: int,
+    pause: Pause,
+    fx: Fx,
 ) -> tuple[list[Fare], int]:
     """Depuis le contexte d'une page Wizz (Kasada accepte le headless furtif de Scrapling) :
     1. SmartSearchCheapFlightsV2 par origine : les destinations desservies (une requête chacune) ;
@@ -52,16 +61,35 @@ def wizz(
     fares: list[Fare] = []
     sent = [1]  # la page elle-même
 
+    version: list[str] = []
+
+    def discover(page: Any) -> None:
+        """Version d'API lue dans la page (HTML, puis requêtes que la page a déjà faites)."""
+        seen = [page.content(), json.dumps(page.evaluate(
+            "performance.getEntriesByType('resource').map(e => e.name)"))]  # fmt: skip
+        for text in seen:
+            if m := API_VERSION.search(text):
+                version[:] = [m.group(1)]
+                return
+        raise LookupError("wizzair: version d'API introuvable dans la page")
+
     def post(page: Any, path: str, body: dict[str, Any]) -> str:
-        sent[0] += 1
-        status, text = page.evaluate(
-            "async ([url, b]) => { const r = await fetch(url, {method: 'POST', headers:"
-            " {'content-type': 'application/json'}, body: JSON.stringify(b)});"
-            " return [r.status, await r.text()] }",
-            [WIZZ_API + path, body],
-        )
-        pause()
-        return str(text) if status == 200 else ""
+        for attempt in range(2):
+            if not version:
+                discover(page)
+            sent[0] += 1
+            status, text = page.evaluate(
+                "async ([url, b]) => { const r = await fetch(url, {method: 'POST', headers:"
+                " {'content-type': 'application/json'}, body: JSON.stringify(b)});"
+                " return [r.status, await r.text()] }",
+                [f"https://be.wizzair.com/{version[0]}/Api{path}", body],
+            )
+            pause()
+            if status == 404 and attempt == 0:  # déploiement en cours : version relue
+                version.clear()
+                continue
+            return str(text) if status == 200 else ""
+        return ""
 
     def act(page: Any) -> Any:
         routes: dict[tuple[str, str], Decimal] = {}
@@ -71,7 +99,7 @@ def wizz(
                 "isReturnFlight": False, "tripDuration": "1 week", "pax": 1,
                 "dateFilterType": "Flexible", "departureDate": None, "returnDate": None,
             }  # fmt: skip
-            found = parse_wizz(post(page, "/search/SmartSearchCheapFlightsV2", body))
+            found = parse_wizz(post(page, "/search/SmartSearchCheapFlightsV2", body), fx)
             fares.extend(found)
             for f in found:
                 routes[(o, f.destination)] = f.price
@@ -90,7 +118,7 @@ def wizz(
                         {"departureStation": d, "arrivalStation": o, "date": stamp},
                     ],
                 }  # fmt: skip
-                fares.extend(parse_farechart(post(page, "/asset/farechart", fc)))
+                fares.extend(parse_farechart(post(page, "/asset/farechart", fc), fx))
             center += dt.timedelta(days=2 * FARECHART_RADIUS + 1)
         return page
 
@@ -105,7 +133,7 @@ def _wizz_url(o: str, d: str, day: str) -> str:
     return f"https://www.wizzair.com/en-gb/booking/select-flight/{o}/{d}/{day}/null/1/0/0/null"
 
 
-def parse_farechart(text: str) -> list[Fare]:
+def parse_farechart(text: str, fx: Fx) -> list[Fare]:
     """Prix par jour des deux sens ; « noData » : pas de vol ce jour-là. Avec le regroupement MAC
     (VNO/KUN), la station réelle du vol est celle de la réponse."""
     try:
@@ -114,19 +142,20 @@ def parse_farechart(text: str) -> list[Fare]:
         fares = []
         for x in legs:
             price = x["price"]
-            if x["priceType"] != "price" or price["currencyCode"] != "EUR":
+            eur = fx.to_eur(Decimal(str(price["amount"])), price["currencyCode"])
+            if x["priceType"] != "price" or eur is None:
                 continue
             o, d, day = x["departureStation"], x["arrivalStation"], x["date"][:10]
             fares.append(Fare(
                 "wizzair", "Wizz Air", o, d, dt.datetime.fromisoformat(day),
-                Decimal(str(price["amount"])), None, _wizz_url(o, d, day),
+                eur, None, _wizz_url(o, d, day),
             ))  # fmt: skip
         return fares
     except (ValueError, KeyError, TypeError):
         return []
 
 
-def parse_wizz(text: str) -> list[Fare]:
+def parse_wizz(text: str, fx: Fx) -> list[Fare]:
     try:
         items = json.loads(text)["items"]
     except (ValueError, KeyError, TypeError):
@@ -135,12 +164,13 @@ def parse_wizz(text: str) -> list[Fare]:
     for it in items:
         f = it["outboundFlight"]
         price = f["regularPrice"]  # `wdcPrice` est le tarif club, réservé aux abonnés
-        if price["currencyCode"] != "EUR":
+        eur = fx.to_eur(Decimal(str(price["amount"])), price["currencyCode"])
+        if eur is None:
             continue
         o, d, when = f["departureStation"], f["arrivalStation"], f["std"][:10]
         fares.append(Fare(
             "wizzair", "Wizz Air", o, d, dt.datetime.fromisoformat(f["std"]),
-            Decimal(str(price["amount"])), None, _wizz_url(o, d, when),
+            eur, None, _wizz_url(o, d, when),
         ))  # fmt: skip
     return fares
 

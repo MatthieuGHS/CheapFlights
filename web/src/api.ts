@@ -6,6 +6,7 @@ export const Config = z.object({
   origins: z.array(z.string()),
   optional_origins: z.array(z.string()),
   days: z.number(),
+  google: z.object({ enabled: z.boolean() }),
   max_nights: z.number(),
   top: z.number(),
   request_budget: z.number(),
@@ -69,7 +70,7 @@ async function call<T>(schema: z.ZodType<T>, url: string, init?: RequestInit): P
 }
 
 export const getConfig = () => call(Config, '/api/config')
-export const startSearch = (request: { days: number; origins: string[]; max_nights: number }) =>
+export const startSearch = (request: { days: number; origins: string[]; max_nights: number; google: boolean }) =>
   call(z.object({ id: z.string() }), '/api/searches', { method: 'POST', body: JSON.stringify(request) })
 export const getSearch = (id: string) => call(Status, `/api/searches/${id}`)
 

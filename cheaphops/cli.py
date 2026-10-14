@@ -19,7 +19,7 @@ def _fare(f: Fare) -> str:
 def render(r: Result, top: int = 10) -> str:
     lines = [f"{r.seconds:.0f} s, {r.requests} requêtes"]
     for name, s in r.sources.items():
-        state = f"ERREUR {s.error}" if s.error else "ok"
+        state = f"ERREUR {s.error}" if s.error else f"ok{f' ({s.mode})' if s.mode else ''}"
         lines.append(
             f"  {name}: {state}, {s.fares} tarifs ({s.in_window} dans la fenêtre), "
             f"{s.requests} req, {s.seconds:.0f} s"
@@ -42,7 +42,10 @@ def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="cheaphops")
     sub = ap.add_subparsers(dest="command", required=True)
     s = sub.add_parser("search", help="dernière minute depuis les origines vers partout")
-    s.add_argument("--days", type=int, help="départs de J+0 à J+N (défaut : config)")
+    s.add_argument("--days", type=int, help="départs de J+0 à J+N, 60 max (défaut : config)")
+    s.add_argument(
+        "--google", action="store_true", help="active Google Flights (hubs échantillonnés)"
+    )
     s.add_argument("--origins", help="ex. VNO,KUN,RIX,WAW (optionnels : WAW, GDN, TLL)")
     srv = sub.add_parser("serve", help="API + interface web sur http://127.0.0.1:PORT")
     srv.add_argument("--port", type=int, default=8000)
@@ -68,6 +71,8 @@ def main(argv: list[str] | None = None) -> int:
         if v is not None
     }
     lm = lm.model_copy(update=update)
+    if args.google:
+        lm = lm.model_copy(update={"google": lm.google.model_copy(update={"enabled": True})})
     print(
         render(
             asyncio.run(run(lm, load_ground(), date.today(), lambda e: print(e, file=sys.stderr)))
