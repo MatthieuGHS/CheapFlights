@@ -12,7 +12,7 @@ from typing import Any
 from cheaphops.core.config import Config, GroundConfig
 from cheaphops.core.ctx import Ctx, make_ctx
 from cheaphops.core.models import Manifest, SearchParams
-from cheaphops.fetch.http import CtxHttp, FetchFailed, SourceBlocked, Throttle
+from cheaphops.fetch.http import BudgetExhausted, CtxHttp, FetchFailed, SourceBlocked, Throttle
 from cheaphops.fetch.types import Transport
 from cheaphops.recipes.base import RecipeError
 from cheaphops.recipes.registry import LoadedRecipe, load
@@ -68,20 +68,30 @@ async def run_search(
     emit: Emit = lambda e: None,
     transports_for: TransportsFor = lambda m: None,
     throttle: Throttle | None = None,
+    recipes: list[LoadedRecipe] | None = None,
 ) -> SearchResult:
+    """`transports_for`, `throttle` et `recipes` : points d'injection des tests (sans réseau)."""
     run_id = uuid.uuid4().hex[:8]
     throttle = throttle or Throttle()
+    budget = Budget(config.search.request_budget, config.search.verify_reserve)
     sources = [
         _Source(
             lr,
             make_ctx(
-                config, conn, lr.manifest, throttle, run_id, today, transports_for(lr.manifest)
+                config,
+                conn,
+                lr.manifest,
+                throttle,
+                run_id,
+                today,
+                transports_for(lr.manifest),
+                gate=budget.allow,
             ),
         )
-        for lr in (load(name) for name in config.search.sources)
+        for lr in recipes or [load(name) for name in config.search.sources]
     ]
-    fx_http = CtxHttp(conn, ECB, config.http, throttle, transports_for(ECB))
-    budget = Budget(config.search.request_budget, [*(s.ctx.http for s in sources), fx_http])
+    fx_http = CtxHttp(conn, ECB, config.http, throttle, transports_for(ECB), gate=budget.allow)
+    budget.clients = [*(s.ctx.http for s in sources), fx_http]
     fx = Fx(fx_http)
     async with AsyncExitStack() as stack:
         for http in (*(s.ctx.http for s in sources), fx_http):
@@ -94,8 +104,16 @@ async def run_search(
             grid, params, ground, slack, keep, timed, ground.metro.transfer_cost_eur
         )
         emit({"type": "candidates", "count": len(found), "pruned": pruned})
+        budget.start_verify()
         trips = await _verify(found, sources, params, config, fx, budget, emit)
-    emit({"type": "done", "trips": len(trips), "requests": budget.spent})
+    emit(
+        {
+            "type": "done",
+            "trips": len(trips),
+            "requests": budget.spent,
+            "fx_skipped": fx.unavailable,
+        }
+    )
     return SearchResult(trips, budget.spent, budget.exhausted, len(found), pruned)
 
 
@@ -104,6 +122,8 @@ async def _guarded(src: _Source, emit: Emit, what: str, call: Any) -> Any:
     (ou s'arrête si elle est bloquée)."""
     try:
         return await call
+    except BudgetExhausted:
+        emit({"type": "budget", "source": src.name, "what": what})
     except SourceBlocked as e:
         src.blocked = True
         emit({"type": "error", "source": src.name, "what": what, "error": str(e), "blocked": True})
@@ -125,39 +145,68 @@ async def _explore(
         )
         for f in fares or []:
             eur = await fx.to_eur(f.price, f.currency)
+            if eur is None:
+                continue
             q = Quote(src.name, f.origin, f.destination, f.day, eur)
             day_fares = grid.setdefault((f.origin, f.destination), {})
             if f.day not in day_fares or eur < day_fares[f.day].price_eur:
                 day_fares[f.day] = q
 
+    async def explore_pairs(
+        queues: list[tuple[_Source, list[tuple[str, str]]]], level: int
+    ) -> None:
+        """Chaque source à son tour : un budget serré profite à toutes."""
+        for i in range(max((len(q) for _, q in queues), default=0)):
+            for src, pairs in queues:
+                if i >= len(pairs) or src.blocked:
+                    continue
+                o, d = pairs[i]
+                for m in out_months:
+                    await add(src, o, d, m)
+                for m in back_months:
+                    await add(src, d, o, m)
+                emit({"type": "progress", "phase": "explore", "level": level, "source": src.name,
+                      "done": i + 1, "of": len(pairs), "requests": budget.spent})  # fmt: skip
+
+    origins = set(params.origins)
+    level1: list[tuple[_Source, list[tuple[str, str]]]] = []
     for src in sources:
         pairs: list[tuple[str, str]] = []
         for o in params.origins:
             dests = await _guarded(src, emit, f"routes {o}", src.loaded.recipe.routes(src.ctx, o))
-            pairs += [(o, d) for d in dests or [] if d not in params.origins]
+            pairs += [(o, d) for d in dests or [] if d not in origins]
         served = {d: sum(1 for _, x in pairs if x == d) for _, d in pairs}
         # shortcut: priorité aux destinations desservies depuis plusieurs origines (open-jaw),
         # puis alphabétique ; l'historique des prix (ex-phase 5) donnerait un meilleur ordre
         pairs.sort(key=lambda p: (-served[p[1]], p[1], p[0]))
-        emit({"type": "explore", "source": src.name, "routes": len(pairs)})
-        for i, (o, d) in enumerate(pairs):
-            if src.blocked or budget.exhausted:
-                emit({"type": "budget", "source": src.name, "explored": i, "of": len(pairs)})
-                break
-            for m in out_months:
-                await add(src, o, d, m)
-            for m in back_months:
-                await add(src, d, o, m)
-            emit(
-                {
-                    "type": "progress",
-                    "phase": "explore",
-                    "source": src.name,
-                    "done": i + 1,
-                    "of": len(pairs),
-                    "requests": budget.spent,
-                }
+        emit({"type": "explore", "level": 1, "source": src.name, "routes": len(pairs)})
+        level1.append((src, pairs))
+    await explore_pairs(level1, 1)
+
+    if not (params.allow_self_transfer and params.max_stops_per_direction):
+        return grid
+    # Second niveau (self-transfer) : depuis les hubs atteints au meilleur prix, vers des
+    # destinations finales, en commençant par celles qu'aucune origine ne dessert en direct.
+    level2: list[tuple[_Source, list[tuple[str, str]]]] = []
+    for src, pairs in level1:
+        if src.blocked or not src.can("day_flights"):  # sans horaires, pas de correspondance
+            continue
+        direct = {d for _, d in pairs}
+        cheapest = {
+            d: min(q.price_eur for q in fares.values())
+            for (o, d), fares in grid.items()
+            if o in origins and d in direct and fares
+        }
+        hops: list[tuple[str, str]] = []
+        for hub in sorted(cheapest, key=lambda h: cheapest[h]):
+            finals = await _guarded(
+                src, emit, f"routes {hub}", src.loaded.recipe.routes(src.ctx, hub)
             )
+            hops += [(hub, f) for f in finals or [] if f not in origins and f != hub]
+        hops.sort(key=lambda p: (p[1] in direct, cheapest[p[0]]))
+        emit({"type": "explore", "level": 2, "source": src.name, "routes": len(hops)})
+        level2.append((src, hops))
+    await explore_pairs(level2, 2)
     return grid
 
 
@@ -191,21 +240,18 @@ async def _verify(
             )
             flights[key] = [
                 Segment(
-                    f.source, f.origin, f.destination, f.departure.date(),
-                    await fx.to_eur(f.price, f.currency),
+                    f.source, f.origin, f.destination, f.departure.date(), eur,
                     departure=f.departure, arrival=f.arrival, flight_no=f.flight_no,
                     booking_url=url, fetched_at=now,
                 )
                 for f in got or [] if (f.origin, f.destination) == (q.origin, q.destination)
+                if (eur := await fx.to_eur(f.price, f.currency)) is not None
             ]  # fmt: skip
         return flights[key]
 
     best: list[Trip] = []
     for i, c in enumerate(sorted(found, key=lambda c: c.bound)):
         if len(best) >= params.top_k and c.bound > best[params.top_k - 1].score:
-            break
-        if budget.exhausted:
-            emit({"type": "budget", "phase": "verify", "verified": i, "of": len(found)})
             break
         outs = chains([await segments(q) for q in c.out.quotes], params)
         rets = chains([await segments(q) for q in c.ret.quotes], params)

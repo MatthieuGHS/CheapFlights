@@ -20,9 +20,8 @@ HEADERS = {
     "client": "desktop",
     "client-version": "3.220.1",
 }
-FLEX = (
-    2  # jours de part et d'autre de DateOut (valeur du site : 3 renvoie 409) ; 2 * FLEX + 1 jours
-)
+# jours de part et d'autre de DateOut : 3 validé en live (6 : 400 InvalidRequestFields)
+FLEX = 3
 WINDOW = 2 * FLEX + 1
 
 

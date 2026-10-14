@@ -37,6 +37,10 @@ class FetchFailed(Exception):
         self.outcome, self.result = outcome, result
 
 
+class BudgetExhausted(FetchFailed):
+    """Le cache aurait pu servir, mais la requête devait partir sur le réseau : refusée."""
+
+
 def is_allowed(url: str, domains: list[str]) -> bool:
     """https uniquement, hôte égal à un domaine de l'allowlist ou sous-domaine de celui-ci."""
     parts = urlsplit(url)
@@ -89,8 +93,10 @@ class CtxHttp:
         transports: Mapping[int, Transport] | None = None,
         now: Callable[[], float] = time.time,
         sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
+        gate: Callable[[], bool] = lambda: True,
     ) -> None:
         self._conn, self._manifest, self._cfg, self._throttle = conn, manifest, config, throttle
+        self._gate = gate  # budget de requêtes : consulté seulement quand le réseau va servir
         self._transports = transports or default_transports(config, manifest)
         self._now, self._sleep = now, sleep
         self._vary = [h.lower() for h in config.vary_headers]
@@ -132,6 +138,8 @@ class CtxHttp:
         if ttl and (hit := self._cached(key, ttl)):
             return hit  # même pendant un backoff : le cache ne coûte aucune requête
         self._check_not_blocked()
+        if not self._gate():
+            raise BudgetExhausted(self._manifest.source, "budget", None)
         rung = start_rung(self._stats(), self._manifest.preferred_rung)
         backoff = self._cfg.rate_limited_backoff_s
         outcome, result = Outcome.FAILED, None

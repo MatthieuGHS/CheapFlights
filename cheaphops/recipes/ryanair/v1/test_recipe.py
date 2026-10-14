@@ -44,7 +44,7 @@ async def test_calendar_matches_prices_visible_on_rendered_page() -> None:
     visible = sorted(int(p.split()[-1]) for p in truth)
     assert sorted(int(f.price) for f in fares) == visible  # le carrousel affiche l'euro entier
     windows = [r.url for r in transport.sent]
-    assert len(windows) == 6 and all("FlexDaysOut=2" in u for u in windows)  # 30 jours / 5
+    assert len(windows) == 5 and all("FlexDaysOut=3" in u for u in windows)  # 30 jours / 7
 
 
 async def test_day_flights_has_aware_local_times_and_reuses_calendar_window() -> None:
@@ -58,11 +58,11 @@ async def test_day_flights_has_aware_local_times_and_reuses_calendar_window() ->
     f = flights[0]
     assert f.departure.isoformat() == "2026-11-04T11:25:00+02:00"
     assert f.arrival.utcoffset() == timedelta(hours=1)
-    assert "DateOut=2026-11-03" in transport.sent[0].url  # fenêtre 1-5 du mois, centrée le 3
+    assert "DateOut=2026-11-04" in transport.sent[0].url  # fenêtre 1-7 du mois, centrée le 4
 
 
 def test_windows_align_on_month_start() -> None:
-    assert [window_start(date(2026, 11, d)).day for d in (1, 5, 6, 30)] == [1, 1, 6, 26]
+    assert [window_start(date(2026, 11, d)).day for d in (1, 7, 8, 30)] == [1, 1, 8, 29]
 
 
 def test_sold_out_flights_skipped() -> None:
@@ -105,7 +105,7 @@ def test_booking_url() -> None:
 async def test_calendar_skips_windows_already_past() -> None:
     transport = FixtureTransport(route)
     await Recipe().calendar(fixture_ctx(MANIFEST, transport), "VNO", "BGY", date(2026, 10, 1))
-    # 14 octobre : les fenêtres 1-5 et 6-10 sont passées ; celle du 11 est centrée sur aujourd'hui
+    # 14 octobre : la fenêtre 1-7 est passée ; celle du 8 est centrée sur aujourd'hui
     assert [u.split("DateOut=")[1][:10] for u in (r.url for r in transport.sent)] == [
-        "2026-10-14", "2026-10-18", "2026-10-23", "2026-10-28", "2026-11-02",
+        "2026-10-14", "2026-10-18", "2026-10-25", "2026-11-01",
     ]  # fmt: skip

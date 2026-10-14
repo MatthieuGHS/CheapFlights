@@ -4,7 +4,7 @@ import re
 from decimal import Decimal
 
 from cheaphops.core.models import Manifest
-from cheaphops.fetch.http import CtxHttp
+from cheaphops.fetch.http import CtxHttp, FetchFailed
 
 ECB_URL = "https://www.ecb.europa.eu/stats/eurofxref/eurofxref-daily.xml"
 ECB = Manifest.model_validate(
@@ -39,10 +39,16 @@ class Fx:
     def __init__(self, http: CtxHttp) -> None:
         self._http = http
         self._rates: dict[str, Decimal] | None = None
+        self.unavailable = 0  # montants non convertis : le tarif est écarté, pas la recherche
 
-    async def to_eur(self, amount: Decimal, currency: str) -> Decimal:
+    async def to_eur(self, amount: Decimal, currency: str) -> Decimal | None:
+        """None si le taux manque (BCE injoignable, budget épuisé, devise inconnue)."""
         if currency == "EUR":
             return amount
-        if self._rates is None:
-            self._rates = parse_ecb((await self._http.get(ECB_URL, freshness="explore")).text)
-        return (amount / self._rates[currency]).quantize(Decimal("0.01"))
+        try:
+            if self._rates is None:
+                self._rates = parse_ecb((await self._http.get(ECB_URL, freshness="explore")).text)
+            return (amount / self._rates[currency]).quantize(Decimal("0.01"))
+        except (FetchFailed, ValueError, KeyError):
+            self.unavailable += 1
+            return None

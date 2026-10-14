@@ -1,6 +1,6 @@
 import logging
 import sqlite3
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from datetime import date
 
@@ -29,6 +29,7 @@ def make_ctx(
     run_id: str,
     today: date,
     transports: Mapping[int, Transport] | None = None,
+    gate: Callable[[], bool] = lambda: True,
 ) -> Ctx:
-    http = CtxHttp(http_conn, manifest, config.http, throttle, transports)
+    http = CtxHttp(http_conn, manifest, config.http, throttle, transports, gate=gate)
     return Ctx(config, http, logging.getLogger(f"cheaphops.{manifest.source}"), run_id, today)

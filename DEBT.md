@@ -39,8 +39,7 @@ Rate limit par domaine enregistrable (fait avant toute requête réelle), fraîc
   quand le moteur appelle les recettes.
 - Ryanair : aucun endpoint calendrier découvert en headless ; `calendar()` agrège la
   disponibilité (≈ 6 appels par route et par mois). Retenter un recon headed du fare finder.
-- Ryanair : `FlexDays` = 3 n'a été testé que sans `client-version` (409). Le retester pourrait
-  passer à 7 jours par appel.
+- Ryanair : `FlexDays` = 3 validé en live en 1c (7 jours par appel) ; 6 est refusé (400).
 
 ## Phase 1b
 

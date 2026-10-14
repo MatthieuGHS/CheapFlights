@@ -395,3 +395,18 @@ async def test_blocked_source_still_serves_fresh_cache(
     assert (await http.get("https://www.ryanair.com/x", freshness="explore")).from_cache
     with pytest.raises(SourceBlocked):
         await http.get("https://www.ryanair.com/other", freshness="explore")
+
+
+async def test_closed_gate_still_serves_cache_but_refuses_network(
+    conn: sqlite3.Connection, clock: FakeClock
+) -> None:
+    from cheaphops.fetch.http import BudgetExhausted
+
+    http, ts = make(conn, clock, ok)
+    await http.get("https://www.ryanair.com/x", freshness="explore")
+    closed = CtxHttp(conn, manifest(), CFG, Throttle(clock=clock, sleep=clock.sleep),
+                     transports={t.rung: t for t in ts}, now=clock, gate=lambda: False)  # fmt: skip
+    assert (await closed.get("https://www.ryanair.com/x", freshness="explore")).from_cache
+    with pytest.raises(BudgetExhausted):
+        await closed.get("https://www.ryanair.com/other", freshness="explore")
+    assert len(ts[0].sent) == 1
