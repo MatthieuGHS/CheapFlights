@@ -137,6 +137,8 @@ class CtxHttp:
         h.update(req.content)
         return h.hexdigest()
 
+    # shortcut: sqlite synchrone dans l'event loop, ok pour un utilisateur ; passer par
+    # asyncio.to_thread si la latence SSE de la phase 2 en souffre
     def _cached(self, key: str) -> FetchResult | None:
         row = self._conn.execute(
             "SELECT url, status, headers, body FROM http_cache WHERE key = ? AND expires_at > ?",
