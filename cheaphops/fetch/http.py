@@ -127,10 +127,10 @@ class CtxHttp:
 
     async def _request(self, req: HttpRequest, freshness: Freshness) -> FetchResult:
         self._check_allowed(req.url)
-        self._check_not_blocked()
         ttl, key = self._ttl[freshness], self._cache_key(req)
         if ttl and (hit := self._cached(key, ttl)):
-            return hit
+            return hit  # même pendant un backoff : le cache ne coûte aucune requête
+        self._check_not_blocked()
         rung = start_rung(self._stats(), self._manifest.preferred_rung)
         backoff = self._cfg.rate_limited_backoff_s
         outcome, result = Outcome.FAILED, None
@@ -143,9 +143,10 @@ class CtxHttp:
                 rung += 1  # navigateur absent, timeout… : le rung suivant a d'autres moyens
                 continue
             outcome = classify(result, self._cfg, self._manifest.block_markers)
-            # 404/5xx : le rung a bien livré une réponse, ce n'est pas un échec de rung
-            rung_ok = outcome in (Outcome.OK, Outcome.FAILED)
-            self._record(rung, None if rung_ok else f"{outcome} HTTP {result.status}", latency)
+            # 404/5xx : le rung a livré une réponse ; 429 : signal du domaine, pas du rung
+            if outcome is not Outcome.RATE_LIMITED:
+                rung_ok = outcome in (Outcome.OK, Outcome.FAILED)
+                self._record(rung, None if rung_ok else f"{outcome} HTTP {result.status}", latency)
             if outcome is Outcome.OK:
                 self._set_blocked(None)
                 if ttl:

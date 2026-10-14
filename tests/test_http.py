@@ -281,6 +281,7 @@ async def test_rate_limited_backs_off_exponentially_on_same_rung(
     backoffs = [s for s in clock.slept if s >= CFG.rate_limited_backoff_s]
     assert backoffs == [CFG.rate_limited_backoff_s, 2 * CFG.rate_limited_backoff_s]
     assert len(ts[0].sent) == 3 and ts[1].sent == []
+    assert stats(conn) == {1: (1, 0)}  # un 429 parle du domaine, pas du rung
 
 
 async def test_transport_error_counted_and_raised(
@@ -348,3 +349,14 @@ async def test_explore_cache_entry_too_old_for_verify(
     assert (await http.get("https://www.ryanair.com/x", freshness="explore")).from_cache
     assert not (await http.get("https://www.ryanair.com/x", freshness="verify")).from_cache
     assert len(ts[0].sent) == 2
+
+
+async def test_blocked_source_still_serves_fresh_cache(
+    conn: sqlite3.Connection, clock: FakeClock
+) -> None:
+    http, _ = make(conn, clock, ok)
+    await http.get("https://www.ryanair.com/x", freshness="explore")
+    conn.execute("INSERT INTO source_state VALUES ('ryanair', 1, ?, 'blocked')", (clock.t + 99,))
+    assert (await http.get("https://www.ryanair.com/x", freshness="explore")).from_cache
+    with pytest.raises(SourceBlocked):
+        await http.get("https://www.ryanair.com/other", freshness="explore")

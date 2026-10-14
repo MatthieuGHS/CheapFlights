@@ -31,7 +31,3 @@ def load(source: str) -> LoadedRecipe:
             module = importlib.import_module(f"cheaphops.recipes.{source}.v{version}.recipe")
             return LoadedRecipe(manifest, module.Recipe())
     raise LookupError(f"no active recipe for {source}")
-
-
-def active_sources() -> list[str]:
-    return sorted(d.name for d in RECIPES_DIR.iterdir() if d.is_dir() and _versions(d.name))

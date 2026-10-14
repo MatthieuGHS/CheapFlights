@@ -9,7 +9,7 @@ import yaml
 from cheaphops.core.config import load_config
 from cheaphops.core.models import Manifest
 from cheaphops.fetch.transports import BrowserTransport, CurlTransport, HttpxTransport
-from cheaphops.fetch.types import HttpRequest, Transport
+from cheaphops.fetch.types import HttpRequest, Transport, TransportError
 
 pytestmark = pytest.mark.anyio
 CFG = load_config(Path(__file__).parent.parent / "config.yaml", Path("/nonexistent")).http
@@ -85,3 +85,52 @@ async def test_browser_rung_fetches_from_the_page(base: str, tmp_path: Path) -> 
         await t.aclose()
     assert (got.status, got.rung, got.json()) == (200, 4, {"path": "/x?d=BGY"})
     assert posted.json() == {"a": 1}
+
+
+async def test_browser_rung_retries_page_load_without_relaunching(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    launches: list[str] = []
+    gotos: list[str] = []
+
+    class Page:
+        async def goto(self, url: str, **_: object) -> None:  # même signature utile que Page.goto
+            gotos.append(url)
+            if len(gotos) == 1:
+                raise TimeoutError("goto timeout")
+
+        async def evaluate(self, js: str, args: list[object]) -> dict[str, object]:
+            return {"status": 200, "url": args[0], "headers": [], "text": "{}"}
+
+    class Context:
+        async def new_page(self) -> Page:
+            return Page()
+
+        async def close(self) -> None:
+            pass
+
+    class Chromium:
+        async def launch_persistent_context(self, path: str, headless: bool) -> Context:
+            launches.append(path)
+            return Context()
+
+    class Driver:
+        chromium = Chromium()
+
+        async def stop(self) -> None:
+            pass
+
+    class Starter:
+        async def start(self) -> Driver:
+            launches.append("driver")
+            return Driver()
+
+    monkeypatch.setattr("cheaphops.fetch.transports.async_playwright", Starter)
+    ryanair = Path(__file__).parent.parent / "cheaphops/recipes/ryanair/v1/manifest.yaml"
+    manifest = Manifest.model_validate(yaml.safe_load(ryanair.read_text()))
+    t = BrowserTransport(CFG.model_copy(update={"browser_dir": tmp_path}), manifest)
+    req = HttpRequest.build("GET", "https://www.ryanair.com/api/x")
+    with pytest.raises(TransportError):
+        await t.send(req)
+    assert (await t.send(req)).status == 200
+    assert len(launches) == 2 and len(gotos) == 2  # un driver, un profil ; seul goto est rejoué

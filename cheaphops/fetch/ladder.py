@@ -35,7 +35,8 @@ def classify(r: FetchResult, cfg: HttpConfig, source_markers: list[str]) -> Outc
 def start_rung(stats: dict[int, tuple[int, int]], preferred: int) -> int:
     """Rung au meilleur taux de succès lissé (s+1)/(n+2) ; un rung jamais essayé vaut 0.5.
     Égalité : le rung préféré du manifeste, puis le moins cher.
-    shortcut: heuristique déterministe ; Thompson sampling (Beta) prévu en phase 5."""
+    """
+    # shortcut: heuristique déterministe ; Thompson sampling (Beta) prévu en phase 5
 
     def score(r: int) -> tuple[float, bool, int]:
         s, f = stats.get(r, (0, 0))

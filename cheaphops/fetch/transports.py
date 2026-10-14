@@ -8,6 +8,7 @@
 Scrapling `Fetcher` n'est pas un rung : il repose sur curl_cffi, comme le rung 2.
 """
 
+import asyncio
 from typing import Any
 
 import curl_cffi
@@ -69,18 +70,20 @@ class CurlTransport:
 
 
 class StealthCookieTransport:
-    """Rung 3 : une visite de `home_url` par le navigateur furtif fournit cookies et user-agent,
-    réutilisés ensuite par curl_cffi pour toutes les requêtes de la session."""
+    """Rung 3 : une visite de `home_url` par le navigateur furtif fournit les cookies, réutilisés
+    ensuite par curl_cffi (avec l'UA de son profil `impersonate`) pour toute la session."""
 
     follows_redirects = False
 
     def __init__(self, cfg: HttpConfig, manifest: Manifest) -> None:
         self._cfg, self._manifest = cfg, manifest
         self._curl: CurlTransport | None = None
+        self._lock = asyncio.Lock()  # un seul amorçage même si plusieurs envois arrivent ensemble
 
     async def send(self, req: HttpRequest) -> FetchResult:
-        if self._curl is None:
-            self._curl = await self._bootstrap()
+        async with self._lock:
+            if self._curl is None:
+                self._curl = await self._bootstrap()
         return await self._curl.send(req)
 
     async def _bootstrap(self) -> CurlTransport:
@@ -122,10 +125,12 @@ class BrowserTransport:
         self._pw: Playwright | None = None
         self._ctx: BrowserContext | None = None
         self._page: Page | None = None
+        self._lock = asyncio.Lock()
 
     async def send(self, req: HttpRequest) -> FetchResult:
         try:
-            page = self._page or await self._open()
+            async with self._lock:
+                page = self._page or await self._open()
             body = req.body.decode() if req.body is not None else None
             out = await page.evaluate(_FETCH_JS, [req.url, req.method, dict(req.headers), body])
         except Exception as e:  # erreurs Playwright : navigateur, réseau, JS
@@ -134,8 +139,10 @@ class BrowserTransport:
         return FetchResult(out["url"], out["status"], headers, out["text"], 4)
 
     async def _open(self) -> Page:
-        self._pw = await async_playwright().start()
-        self._ctx = await self._pw.chromium.launch_persistent_context(
+        """Après un échec de chargement, seul `goto` est rejoué : relancer le navigateur sur un
+        profil persistant encore ouvert échouerait (profil verrouillé)."""
+        self._pw = self._pw or await async_playwright().start()
+        self._ctx = self._ctx or await self._pw.chromium.launch_persistent_context(
             str(self._cfg.browser_dir / self._manifest.source),
             headless=self._cfg.browser_headless,
         )

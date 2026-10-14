@@ -1,3 +1,4 @@
+import json
 from calendar import monthrange
 from collections.abc import Iterator
 from datetime import date, timedelta
@@ -31,9 +32,9 @@ def window_start(day: date) -> date:
     return day.replace(day=1) + timedelta(days=(day.day - 1) // WINDOW * WINDOW)
 
 
-def parse_availability(data: Any) -> list[Flight]:
+def parse_availability(text: str) -> list[Flight]:
     try:
-        return list(_flights(data))
+        return list(_flights(json.loads(text)))
     except (KeyError, TypeError, IndexError, ValueError, ValidationError) as e:
         raise SchemaMismatch(f"ryanair availability: {type(e).__name__}: {e}") from e
 
@@ -46,7 +47,9 @@ def _flights(data: Any) -> Iterator[Flight]:
                 fare = f.get("regularFare")  # tarif de base ; absent si le vol est complet
                 if not fare or f["faresLeft"] == 0:
                     continue
-                adult = next(x for x in fare["fares"] if x["type"] == "ADT")
+                adult = next((x for x in fare["fares"] if x["type"] == "ADT"), None)
+                if adult is None:
+                    raise KeyError("no ADT fare")
                 yield Flight(
                     source="ryanair",
                     flight_no=f["flightNumber"].replace(" ", ""),
@@ -65,7 +68,7 @@ class Recipe:
         r = await ctx.http.get(url, freshness="explore", headers=HEADERS)
         try:
             return sorted({x["arrivalAirport"]["code"] for x in r.json()})
-        except (KeyError, TypeError) as e:
+        except (KeyError, TypeError, ValueError) as e:  # ValueError : corps non JSON
             raise SchemaMismatch(f"ryanair routes: {e}") from e
 
     async def _window(self, ctx: Ctx, o: str, d: str, start: date, verify: bool) -> list[Flight]:
@@ -73,7 +76,7 @@ class Recipe:
             "ADT": 1, "TEEN": 0, "CHD": 0, "INF": 0,
             "Origin": o, "Destination": d,
             "IncludeConnectingFlights": "false",
-            "DateOut": (start + timedelta(days=FLEX)).isoformat(),
+            "DateOut": max(start + timedelta(days=FLEX), ctx.today).isoformat(),
             "FlexDaysBeforeOut": FLEX, "FlexDaysOut": FLEX,
             "FlexDaysBeforeIn": FLEX, "FlexDaysIn": FLEX,
             "RoundTrip": "false", "IncludePrimeFares": "false", "ToUs": "AGREED",
@@ -84,7 +87,7 @@ class Recipe:
             headers=HEADERS,
             freshness="verify" if verify else "explore",
         )
-        return parse_availability(r.json())
+        return parse_availability(r.text)
 
     async def calendar(self, ctx: Ctx, o: str, d: str, month: date) -> list[DayFare]:
         first, days = month.replace(day=1), monthrange(month.year, month.month)[1]

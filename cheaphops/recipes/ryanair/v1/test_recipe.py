@@ -69,18 +69,36 @@ def test_sold_out_flights_skipped() -> None:
     data = json.loads(AVAIL.read_text())
     data["trips"][0]["dates"][0]["flights"][0]["faresLeft"] = 0
     data["trips"][0]["dates"][0]["flights"][1]["regularFare"] = None
-    assert all(f.departure.date() != date(2026, 11, 4) for f in parse_availability(data))
+    flights = parse_availability(json.dumps(data))
+    assert all(f.departure.date() != date(2026, 11, 4) for f in flights)
 
 
 def test_schema_change_raises_schema_mismatch() -> None:
     data = json.loads(AVAIL.read_text())
     del data["trips"][0]["dates"][0]["flights"][0]["timeUTC"]
     with pytest.raises(SchemaMismatch):
-        parse_availability(data)
+        parse_availability(json.dumps(data))
+
+
+def test_missing_adult_fare_or_non_json_raises_schema_mismatch() -> None:
+    data = json.loads(AVAIL.read_text())
+    data["trips"][0]["dates"][0]["flights"][1]["regularFare"]["fares"][0]["type"] = "TEEN"
+    with pytest.raises(SchemaMismatch):
+        parse_availability(json.dumps(data))
+    with pytest.raises(SchemaMismatch):
+        parse_availability("<html>maintenance</html>")
+
+
+async def test_routes_html_body_raises_schema_mismatch(tmp_path: Path) -> None:
+    page = tmp_path / "page.html"
+    page.write_text("<html>maintenance</html>")
+    ctx = fixture_ctx(MANIFEST, FixtureTransport(lambda req: page))
+    with pytest.raises(SchemaMismatch):
+        await Recipe().routes(ctx, "VNO")
 
 
 def test_booking_url() -> None:
-    f = parse_availability(json.loads(AVAIL.read_text()))[0]
+    f = parse_availability(AVAIL.read_text())[0]
     url = Recipe().booking_url(f)
     assert url is not None and "dateOut=2026-11-04" in url and "destinationIata=BGY" in url
 
@@ -88,7 +106,7 @@ def test_booking_url() -> None:
 async def test_calendar_skips_windows_already_past() -> None:
     transport = FixtureTransport(route)
     await Recipe().calendar(fixture_ctx(MANIFEST, transport), "VNO", "BGY", date(2026, 10, 1))
-    # 14 octobre : les fenêtres 1-5 et 6-10 sont passées, restent 11, 16, 21, 26, 31
+    # 14 octobre : les fenêtres 1-5 et 6-10 sont passées ; celle du 11 est centrée sur aujourd'hui
     assert [u.split("DateOut=")[1][:10] for u in (r.url for r in transport.sent)] == [
-        "2026-10-13", "2026-10-18", "2026-10-23", "2026-10-28", "2026-11-02",
+        "2026-10-14", "2026-10-18", "2026-10-23", "2026-10-28", "2026-11-02",
     ]  # fmt: skip
