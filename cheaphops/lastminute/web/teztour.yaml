@@ -1,0 +1,14 @@
+# TEZ Tour Lituanie, page « Skrydžiai » (charters) : sièges de vols seuls, aller simple, date et
+# heure, compagnie, prix par personne. Les deux sens sont listés (VNO-HER et HER-VNO).
+name: teztour
+mode: fetcher
+urls:
+  - https://www.teztour.lt/promotions/charters
+date_format: "%d.%m.%Y %H:%M"
+extract:
+  kind: selectors
+  item: "div.hotel-wrap.hotel_point"
+  fields:
+    title: "a[href*=flightsearch]::text"
+    url: "a[href*=flightsearch]::attr(href)"
+  pattern: '\((?P<origin>[A-Z]{3})\)\s*-\s*[^()]+\((?P<destination>[A-Z]{3})\).*?Aviakompanija:\s*(?P<airline>.+?)\s+Išvykimas:\s*(?P<date>\d{2}\.\d{2}\.\d{4} \d{2}:\d{2}).*?(?P<price>\d[\d ]*\s?€)'

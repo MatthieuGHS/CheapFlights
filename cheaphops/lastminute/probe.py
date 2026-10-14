@@ -3,10 +3,11 @@ une vraie page s'arrête là). Écrit le HTML dans data/probe/ et renvoie un ré
 
 import hashlib
 import json
+import os
 import re
 import sys
 import time
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Any
 
@@ -70,6 +71,8 @@ def probe(url: str, modes: tuple[str, ...] = ("fetcher", "stealthy", "dynamic"))
         s["seconds"] = round(time.monotonic() - t, 1)
         s["file"] = f"{slug}.{mode}.html"
         tried.append(s)
+        if s.get("status") == 404:
+            break  # page absente : un autre mode n'y changera rien
         if not s.get("error") and not s.get("wall") and s["status"] == 200 and s["bytes"] > 4000:
             break
     best = tried[-1]
@@ -78,12 +81,13 @@ def probe(url: str, modes: tuple[str, ...] = ("fetcher", "stealthy", "dynamic"))
 
 
 def main(argv: list[str]) -> None:
+    modes = tuple(os.environ.get("PROBE_MODES", "fetcher,stealthy,dynamic").split(","))
     urls = [u for u in argv if u.startswith("http")] or [
         line.split()[0] for line in sys.stdin if line.startswith("http")
     ]
-    with ThreadPoolExecutor(5) as ex:
-        for r in ex.map(probe, urls):
-            print(json.dumps(r, ensure_ascii=False), flush=True)
+    with ThreadPoolExecutor(4) as ex:
+        for fut in as_completed([ex.submit(probe, u, modes) for u in urls]):
+            print(json.dumps(fut.result(), ensure_ascii=False), flush=True)
 
 
 if __name__ == "__main__":

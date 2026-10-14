@@ -12,22 +12,26 @@ Schéma (voir secretflying.yaml) :
     kind: rss        pattern  (appliquée au titre puis à la description)
     kind: json       response_url_contains (réponse XHR capturée pendant le chargement),
                      items (chemin pointé), fields {origin, destination, price, url, ...}
-  pattern : regex à groupes nommés origin, destination, price (montant avec devise)
+  pattern : regex à groupes nommés origin, destination, price (montant avec devise). Avec les
+            groupes `date` (+ `date_format` strptime) et éventuellement `airline`, la ligne est un
+            vol daté : elle devient un `Fare` qui entre dans l'assemblage des aller-retours.
 """
 
 import contextlib
+import datetime as dt
 import json
 import re
-from collections.abc import AsyncGenerator, Callable
+from collections.abc import AsyncGenerator
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import Any, Literal
+from urllib.parse import urljoin
 from xml.etree import ElementTree
 
 import yaml
 from pydantic import BaseModel, ConfigDict
 
-from cheaphops.lastminute.fares import Deal
+from cheaphops.lastminute.fares import Deal, Fare
 from cheaphops.lastminute.fx import Fx
 
 WEB_DIR = Path(__file__).parent / "web"
@@ -73,7 +77,8 @@ class Source(BaseModel):
     urls: list[str]
     mode: Literal["fetcher", "stealthy", "dynamic"] = "fetcher"
     adaptive: bool = False
-    cities: dict[str, str]
+    cities: dict[str, str] = {}
+    date_format: str | None = None
     crawl: Crawl | None = None
     extract: Selectors | Rss | JsonTap
 
@@ -110,29 +115,45 @@ def _dig(obj: Any, path: str) -> Any:
     return obj
 
 
-def deals_from_rows(src: Source, rows: list[dict[str, str]], fx: Fx) -> list[Deal]:
-    """Lignes {title, url, text} -> bons plans : trajet et prix extraits par `pattern`, origine
-    gardée si c'est l'une de `cities`, prix converti en EUR."""
+def deals_from_rows(
+    src: Source, rows: list[dict[str, str]], fx: Fx
+) -> tuple[list[Deal], list[Fare]]:
+    """Lignes {title, url, text} -> (bons plans, vols datés) : trajet et prix extraits par
+    `pattern`, prix converti en EUR. L'origine d'un bon plan doit être l'une de `cities` (ou un
+    code IATA) ; un vol daté est gardé tel quel, le filtre sur les origines vient après."""
     pattern = src.extract.pattern if isinstance(src.extract, Selectors | Rss) else ""
-    deals = []
+    deals: list[Deal] = []
+    fares: list[Fare] = []
     for row in rows:
         m = next(
             (
                 m
                 for t in (row.get("title", ""), row.get("text", ""))
-                if (m := re.search(pattern, t))
+                if (m := re.search(pattern, t, re.DOTALL))
             ),
             None,
         )
         if not m or not row.get("url"):
             continue
-        origin = src.cities.get(m["origin"].strip())
+        name, groups = m["origin"].strip(), m.groupdict()
+        destination = re.sub(r"[^\w\s'.-]", "", m["destination"]).strip()
+        origin = src.cities.get(name, name if re.fullmatch(r"[A-Z]{3}", name) else None)
         money = parse_money(m["price"])
         eur = fx.to_eur(money[0], money[1]) if money else None
-        if origin and eur is not None:
-            deals.append(Deal(src.name, row["title"].strip(), origin, m["destination"].strip(),
+        if not origin or eur is None:
+            continue
+        if groups.get("date") and src.date_format:
+            with contextlib.suppress(ValueError):
+                when = dt.datetime.strptime(groups["date"].strip(), src.date_format)
+                airline = (groups.get("airline") or src.name).strip()
+                fares.append(
+                    Fare(src.name, airline, origin, destination, when, eur, None,
+                         row["url"])
+                )  # fmt: skip
+        else:
+            deals.append(Deal(src.name, row["title"].strip(), origin, destination,
                               eur, row["url"]))  # fmt: skip
-    return deals
+    return deals, fares
 
 
 def deals_from_json(src: Source, payload: Any, fx: Fx) -> list[Deal]:
@@ -166,6 +187,17 @@ def rows_from_rss(body: bytes) -> list[dict[str, str]]:
         title = it.findtext("title") or it.findtext("{http://www.w3.org/2005/Atom}title") or ""
         text = it.findtext("description") or it.findtext("{http://www.w3.org/2005/Atom}summary")
         rows.append({"title": title, "url": link, "text": text or ""})
+    return rows
+
+
+def page_rows(src: Source, ex: Selectors, page: Any) -> list[dict[str, str]]:
+    rows = []
+    for el in page.css(ex.item, adaptive=src.adaptive, auto_save=src.adaptive):
+        row = {k: str(el.css(sel).get() or "") for k, sel in ex.fields.items()}
+        row["text"] = el.get_all_text()
+        if row.get("url"):
+            row["url"] = urljoin(page.url, row["url"])
+        rows.append(row)
     return rows
 
 
@@ -204,11 +236,7 @@ def _spider(src: Source, mode: str) -> Any:
                 for row in rows_from_rss(response.body):
                     yield row
             else:
-                for el in response.css(ex.item, adaptive=src.adaptive, auto_save=src.adaptive):
-                    row = {k: str(el.css(sel).get() or "") for k, sel in ex.fields.items()}
-                    row["text"] = el.get_all_text()
-                    if row.get("url"):
-                        row["url"] = response.urljoin(row["url"])
+                for row in page_rows(src, ex, response):
                     yield row
             if src.crawl and not response.meta.get("depth"):
                 links = response.css(src.crawl.follow + "::attr(href)").getall()
@@ -218,28 +246,25 @@ def _spider(src: Source, mode: str) -> Any:
     return Generic()
 
 
-def run_source(src: Source, fx: Fx) -> tuple[list[Deal], int, str]:
-    """(bons plans, pages demandées, mode qui a marché). Lève LookupError si aucun mode ne livre."""
-    start = MODES.index(src.mode)
+def run_source(src: Source, fx: Fx) -> tuple[list[Deal], list[Fare], int, str]:
+    """(bons plans, vols datés, pages demandées, mode qui a marché). Lève LookupError si aucun
+    mode ne livre."""
     last: Exception | None = None
-    for mode in MODES[start:]:
+    for mode in MODES[MODES.index(src.mode) :]:
         try:
             result = _spider(src, mode).start()
         except Exception as e:
             last = e
             continue
         pages = result.stats.requests_count
+        deals: list[Deal] = []
+        fares: list[Fare] = []
         if isinstance(src.extract, JsonTap):
-            deals = []
             for item in result.items:
                 with contextlib.suppress(KeyError, TypeError, IndexError):
                     deals += deals_from_json(src, item["json"], fx)
         else:
-            deals = deals_from_rows(src, [dict(i) for i in result.items], fx)
-        if deals:
-            return deals, pages, mode
+            deals, fares = deals_from_rows(src, [dict(i) for i in result.items], fx)
+        if deals or fares:
+            return deals, fares, pages, mode
     raise LookupError(f"{src.name}: aucun mode ne livre ({last or 'pages vides ou bloquées'})")
-
-
-def fetch_source(src: Source, pause: Callable[[], None], fx: Fx) -> tuple[list[Deal], int, str]:
-    return run_source(src, fx)

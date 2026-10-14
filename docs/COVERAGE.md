@@ -43,3 +43,23 @@ Corendon, Jet2 — leurs sièges se vendent surtout via les voyagistes (lot A).
 | lotnisko-chopina.pl (WAW) | découverte | accessible | fetcher | accueil seulement ; pages de destinations non trouvées (404) |
 | airport.gdansk.pl | découverte | accessible | fetcher | accueil lisible ; `gdansk-airport.pl` ferme la connexion |
 | en.wikipedia.org (6 aéroports) | découverte | accessible | fetcher | tableaux compagnies/destinations, source des listes ci-dessus |
+| teztour.lt (TEZ Tour LT) | charter, vol seul | **source** (`teztour.yaml`) | fetcher | page « Skrydžiai » : 49 vols aller simple VNO→… avec date, heure, compagnie (GetJet, Airhub…), prix ; entrent dans l'assemblage des aller-retours |
+| paskutineminute.teztour.lt | voyagiste | accessible | fetcher | forfaits hôtel+vol, pas de vol seul |
+| tez-tour.com | voyagiste | accessible | fetcher | accueil de recherche (formulaire) |
+| joinup.lt / .lv / .ee (Join UP!) | voyagiste | accessible | fetcher (SPA Nuxt), dynamic pour l'API | forfaits uniquement ; `/api/main/tour/regions` ne donne que les villes de départ (VNO, RIX, TLL) sans prix |
+| novaturas.lt | voyagiste | accessible | fetcher + dynamic (GraphQL) | forfaits ; `flights.novatours.eu` (billets) est un formulaire de recherche, non exploré |
+| coraltravel.lt / .lv | voyagiste | accessible | stealthy | fetcher bloqué, stealthy passe ; forfaits seulement |
+| anextour.com / anextour.lt | voyagiste | bloqué (.com) / accessible (.lt) | 3 modes | .com : CAPTCHA ; .lt : formulaire de forfaits |
+| itaka.pl, r.pl (Rainbow), tui.pl | voyagiste PL | accessible | fetcher | last minute en forfaits, départs Pologne, pas de vol seul public |
+| tui.lt / .lv / .ee | voyagiste | bloqué | 3 modes | erreur TLS (nom de certificat invalide) |
+| enterair.pl, getjet.aero, smartlynx | charter (compagnie) | accessible / sans tarifs | fetcher | pas de vente publique de sièges ; SmartLynx : erreur HTTP |
+| corendon.com / corendonairlines.com | charter (compagnie) | accessible, sans tarifs lisibles | fetcher | desserte Baltique limitée à TLL |
+| fly4free.com (flux RSS par ville) | bons plans | **source** (`fly4free-com.yaml`) | fetcher | 87 bons plans VNO/RIX/TLL/WAW/GDN, aller-retour long-courrier, sans date |
+| fly4free.pl | bons plans | accessible, écarté | fetcher | flux et tags lisibles mais titres en forfaits « loty + hôtel » : aucun vol seul extrait |
+| secretflying.com `/feed/` | bons plans | accessible via la recherche | fetcher (flux : page HTML) | le flux renvoie une page ; la recherche (YAML existant) suffit |
+| travelpirates.com, urlaubspiraten.de, wakacyjnipiraci.pl | bons plans DE/PL | accessible, écarté | fetcher | flux lisibles, offres surtout hôtels/forfaits depuis DE/PL ; pas de départ VNO/RIX/TLL |
+| holidaypirates.com | bons plans | accessible, sans prix | fetcher | page rendue côté client, aucun prix dans le HTML |
+| pepper.pl `/grupa/podroze` | bons plans PL | accessible | fetcher | page lisible (55 prix) ; flux RSS : 404 + CAPTCHA ; extraction non écrite |
+| jacksflightclub.com | bons plans | bloqué | fetcher | `/deals` : 404 (offres réservées aux abonnés) |
+| theflightdeal.com | bons plans US | accessible, écarté | fetcher | départs États-Unis uniquement |
+| sites LT/LV/EE de bons plans | bons plans | non trouvé | — | recherche web sans résultat exploitable ; `skrydziai.lt` (certificat invalide) et `lowcost.lt` (DNS) inaccessibles |

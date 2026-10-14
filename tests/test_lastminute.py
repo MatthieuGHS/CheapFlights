@@ -128,7 +128,8 @@ def test_generic_titles_convert_currency_and_keep_only_known_origins() -> None:
         {"title": "Riga, Latvia to Oslo, Norway for only $55", "url": "u4"},
         {"title": "Vilnius, Lithuania to Oslo, Norway for only ¥50", "url": "u5"},
     ]
-    got = generic.deals_from_rows(SF, rows, FX2)
+    got, no_fares = generic.deals_from_rows(SF, rows, FX2)
+    assert no_fares == []
     assert [(d.origin, d.destination, d.price) for d in got] == [
         ("VNO", "Reykjavik", Decimal("66.00")),
         ("VNO", "Toronto", Decimal("100.00")),
@@ -141,7 +142,7 @@ def test_generic_rss_rows_then_pattern_on_description() -> None:
     <description>Riga, Latvia to Rome, Italy for only \xe2\x82\xac39 return</description></item>
     </channel></rss>"""
     rows = generic.rows_from_rss(xml)
-    (d,) = generic.deals_from_rows(SF, rows, FX2)
+    ((d,), _) = generic.deals_from_rows(SF, rows, FX2)
     assert (d.origin, d.destination, d.price, d.url) == (
         "RIX",
         "Rome",
@@ -203,3 +204,48 @@ def test_run_threshold_budget_and_dead_source(monkeypatch) -> None:  # type: ign
     assert r.sources["wizzair"].error and not r.sources["ryanair"].error
     assert r.requests <= 40
     assert r.roundtrips[0].total == Decimal("32")
+
+
+def test_teztour_fixture_yields_dated_oneway_charters() -> None:
+    from pathlib import Path
+
+    from scrapling.parser import Selector
+
+    src = next(s for s in generic.load_sources() if s.name == "teztour")
+    assert isinstance(src.extract, generic.Selectors)
+    page = Selector(
+        (Path(__file__).parent / "fixtures/web/teztour.html").read_text(),
+        url="https://www.teztour.lt/x",
+    )
+    deals, fares = generic.deals_from_rows(src, generic.page_rows(src, src.extract, page), FX2)
+    assert deals == [] and len(fares) == 3
+    f = fares[0]
+    assert (f.origin, f.destination, f.price, f.source) == (
+        "VNO",
+        "HER",
+        Decimal("69.00"),
+        "teztour",
+    )
+    assert (
+        f.departure.hour == 6 and f.url and f.url.startswith("https://www.teztour.lt/flightsearch/")
+    )
+
+
+def test_fly4free_com_feed_titles() -> None:
+    src = next(s for s in generic.load_sources() if s.name == "fly4free-com")
+    items = [
+        "Etihad Airways flights from Vilnius to South Korea 🍁 from €585",
+        "Finnair flights from the Baltic countries to Singapore from €563",
+        "Cheap first minute flights from Riga, Latvia to spectacular Faroe Islands 🏔 for €208",
+        "Thailand classics from Warsaw 🌴 Bangkok + Krabi — all flights for just €515 total",
+        "Top-rated 4🌟 Eurostars Metropole in Riga, Latvia for €50/double",
+    ]
+    xml = "<rss><channel>" + "".join(
+        f"<item><title>{t}</title><link>https://f4f/{i}</link></item>" for i, t in enumerate(items)
+    ) + "</channel></rss>"  # fmt: skip
+    deals, fares = generic.deals_from_rows(src, generic.rows_from_rss(xml.encode()), FX2)
+    assert fares == []
+    assert [(d.origin, d.destination, d.price) for d in deals] == [
+        ("VNO", "South Korea", Decimal("585.00")),
+        ("RIX", "spectacular Faroe Islands", Decimal("208.00")),
+    ]

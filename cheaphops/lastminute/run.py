@@ -110,13 +110,16 @@ async def run(
                 fares += sources.ryanair(api, o, d0 + timedelta(lo), d0 + timedelta(hi))
         return fares, api.num_queries
 
+    web_fares: list[Fare] = []
+
     async def web_all() -> list[Deal]:
         """Sources YAML : une à la fois (chacune peut ouvrir un navigateur)."""
         deals: list[Deal] = []
         for src in generic.load_sources():
 
             def one(src: generic.Source = src) -> tuple[list[Deal], int]:
-                got, pages, mode = generic.fetch_source(src, pause, rates)
+                got, fares, pages, mode = generic.run_source(src, rates)
+                web_fares.extend(fares)
                 modes[src.name] = mode
                 return got, pages
 
@@ -136,11 +139,13 @@ async def run(
     )  # fmt: skip
     last = d1 + timedelta(days=cfg.max_nights)
     # VNO et KUN forment une zone MAC chez Wizz : un même vol sort des deux farecharts
-    pool = [f for f in dict.fromkeys((*ry, *wz, *gg)) if d0 <= f.day <= last]
+    pool = [f for f in dict.fromkeys((*ry, *wz, *gg, *web_fares)) if d0 <= f.day <= last]
     outs = [f for f in pool if f.origin in origins and f.day <= d1]
     backs = [f for f in pool if f.destination in origins]
     for f in outs:
-        reports[f.source].in_window += 1
+        reports.setdefault(
+            f.source if f.source in reports else f"web:{f.source}", SourceReport()
+        ).in_window += 1
 
     # Étape 2 : un retour Ryanair par destination dont l'aller est sous le seuil
     cheap: dict[str, Fare] = {}
@@ -165,11 +170,15 @@ async def run(
         backs += await call("ryanair", ry_back)
 
     total = sum(r.requests for r in reports.values())
+    unique = {(d.origin, d.destination, d.price): d for d in deals}  # un même bon plan, 5 flux
+    best_deals = sorted(unique.values(), key=lambda d: d.price)[: cfg.top]
     result = Result(
         cheapest_oneways(outs, cfg.top, bus),
         roundtrips(outs, backs, cfg.max_nights, cfg.top, bus),
-        sorted(deals, key=lambda d: d.price)[: cfg.top],
-        total, time.monotonic() - start, reports,
-    )  # fmt: skip
+        best_deals,
+        total,
+        time.monotonic() - start,
+        reports,
+    )
     emit({"type": "finished", "requests": total, "seconds": round(result.seconds, 1)})
     return result

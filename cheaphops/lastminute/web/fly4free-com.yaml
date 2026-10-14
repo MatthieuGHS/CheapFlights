@@ -1,0 +1,15 @@
+# Fly4free.com : flux RSS par ville (tags), titres du type « Etihad Airways flights from Vilnius
+# to Kuala Lumpur, Malaysia for €577 ». Aller-retour, sans date précise. Les titres « from the
+# Baltic countries » n'ont pas d'origine précise : écartés.
+name: fly4free-com
+mode: fetcher
+urls:
+  - https://www.fly4free.com/tag/vilnius/feed/
+  - https://www.fly4free.com/tag/riga/feed/
+  - https://www.fly4free.com/tag/tallinn/feed/
+  - https://www.fly4free.com/tag/warsaw/feed/
+  - https://www.fly4free.com/tag/gdansk/feed/
+extract:
+  kind: rss
+  pattern: 'from (?P<origin>Vilnius|Kaunas|Riga|Tallinn|Warsaw|Gdansk|Gda[nń]sk)\b.*? to (?P<destination>[^,€$£]+?)(?:,[^€$£]*?)? (?:for|from|only)\s+(?:just\s+)?(?P<price>[€$£]\s?\d[\d.,]*)'
+cities: {Vilnius: VNO, Kaunas: KUN, Riga: RIX, Tallinn: TLL, Warsaw: WAW, Gdansk: GDN, Gdańsk: GDN}
