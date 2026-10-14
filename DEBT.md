@@ -3,7 +3,7 @@
 Généré par `/ponytail-debt` : un raccourci = un commentaire `shortcut:` dans le code.
 À régénérer en fin de phase.
 
-## Marqueurs `shortcut:` (ledger `/ponytail-debt`, fin de 1c)
+## Marqueurs `shortcut:` (ledger `/ponytail-debt`, fin de la phase 2)
 
 Les phases 3 à 5 sont en pause : les déclencheurs qui les citaient visent désormais les skills
 projet ou un symptôme observable.
@@ -26,7 +26,10 @@ projet ou un symptôme observable.
   `ground.yaml`. Déclencheur : une destination dont les aéroports ne sont pas regroupés
   (rayon via OurAirports).
 
-7 marqueurs, 0 sans déclencheur.
+- `cheaphops/search/engine.py:224`. Âge des prix = heure du Verify, même servi par le cache
+  (écart au plus 15 min). Déclencheur : une UI qui doit afficher l'âge exact.
+
+8 marqueurs, 0 sans déclencheur.
 
 ## Phase 1a, soldé
 
