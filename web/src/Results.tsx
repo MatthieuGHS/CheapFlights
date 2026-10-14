@@ -58,6 +58,21 @@ export function Results({ result }: { result: Result }) {
           ))}
         </ul>
       </div>
+      {result.deals.length > 0 && (
+        <div>
+          <h2 className="mb-2 text-lg font-semibold">Bons plans (sans date précise)</h2>
+          <ul className="space-y-1 text-sm">
+            {result.deals.map((d) => (
+              <li key={d.url}>
+                <strong>{d.price.toFixed(0)} €</strong> · {d.origin}→{d.destination} ·{' '}
+                <a href={d.url} target="_blank" rel="noreferrer" className="underline">
+                  {d.source}
+                </a>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
     </section>
   )
 }

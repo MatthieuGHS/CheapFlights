@@ -4,6 +4,7 @@ import { z } from 'zod'
 
 export const Config = z.object({
   origins: z.array(z.string()),
+  optional_origins: z.array(z.string()),
   days: z.number(),
   max_nights: z.number(),
   top: z.number(),
@@ -25,6 +26,9 @@ export type Fare = z.infer<typeof Fare>
 
 const Result = z.object({
   oneways: z.array(Fare),
+  deals: z.array(
+    z.object({ source: z.string(), title: z.string(), origin: z.string(), destination: z.string(), price: z.number(), url: z.string(), when: z.string().nullable() }),
+  ),
   roundtrips: z.array(z.object({ out: Fare, back: Fare })),
   requests: z.number(),
   seconds: z.number(),

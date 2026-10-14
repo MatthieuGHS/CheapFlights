@@ -1,0 +1,10 @@
+# Trajets sol depuis le domicile, aller simple. Coût et durée : estimations de bus (FlixBus,
+# Lux Express, Ecolines), à ajuster. Le coût s'ajoute au prix des vols : une fois pour un
+# départ depuis cet aéroport, une fois pour un retour qui y atterrit.
+home: VNO
+buses:
+  KUN: {cost_eur: 10, duration_min: 100}
+  RIX: {cost_eur: 15, duration_min: 270}
+  WAW: {cost_eur: 25, duration_min: 570}
+  GDN: {cost_eur: 40, duration_min: 780}
+  TLL: {cost_eur: 30, duration_min: 540}

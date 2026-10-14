@@ -1,24 +1,11 @@
+from decimal import Decimal
 from pathlib import Path
 from typing import Annotated, Any, Literal
 
 import yaml
 from pydantic import Field
 
-from cheaphops.core.models import Iata, Model
-
-
-class HttpConfig(Model):
-    timeout_s: Annotated[float, Field(gt=0)]
-    vary_headers: list[str]  # headers qui changent la réponse : ils entrent dans la clé de cache
-    explore_ttl_s: Annotated[int, Field(ge=0)]
-    verify_ttl_s: Annotated[int, Field(ge=0)]
-    max_attempts: Annotated[int, Field(ge=1)]
-    rate_limited_backoff_s: Annotated[float, Field(gt=0)]  # 429 : doublé à chaque essai
-    blocked_backoff_s: Annotated[float, Field(gt=0)]  # source bloquée : doublé à chaque blocage
-    block_markers: list[str]  # corps de réponse d'un mur anti-bot -> monter d'un rung
-    captcha_markers: list[str]  # CAPTCHA -> source bloquée, jamais résolu
-    impersonate: str  # profil TLS curl_cffi des rungs 2 et 3
-    browser_dir: Path  # profils persistants du rung 4
+from cheaphops.core.models import Iata, Model, Price
 
 
 class Google(Model):
@@ -34,15 +21,16 @@ class LastMinute(Model):
     days: Annotated[int, Field(ge=0)]  # départs de J+0 à J+days
     max_nights: Annotated[int, Field(ge=0)]
     top: Annotated[int, Field(ge=1)]
-    return_candidates: Annotated[int, Field(ge=0)]  # destinations dont on cherche le retour
+    optional_origins: list[Iata]  # villes voisines, avec bus depuis le domicile (ground.yaml)
+    return_below_eur: Annotated[float, Field(ge=0)]  # retours cherchés si l'aller coûte moins
+    wizz_routes: Annotated[int, Field(ge=0)]  # routes Wizz dont on lit le farechart
+    pause_s: tuple[float, float]  # pause aléatoire entre deux requêtes d'une même source
     request_budget: Annotated[int, Field(ge=1)]
     google: Google
 
 
 class Config(Model):
-    db_path: Path
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR"]
-    http: HttpConfig
     lastminute: LastMinute
 
 
@@ -67,3 +55,21 @@ def load_config(path: Path = Path("config.yaml"), local: Path | None = None) -> 
     if local.exists():
         data = _merge(data, _read(local))
     return Config.model_validate(data)
+
+
+class GroundBus(Model):
+    cost_eur: Price
+    duration_min: Annotated[int, Field(gt=0)]
+
+
+class Ground(Model):
+    home: Iata
+    buses: dict[Iata, GroundBus]
+
+    def cost(self, airport: str) -> Decimal:
+        """Bus aller simple depuis le domicile ; 0 pour le domicile lui-même."""
+        return self.buses[airport].cost_eur if airport in self.buses else Decimal(0)
+
+
+def load_ground(path: Path = Path("ground.yaml")) -> Ground:
+    return Ground.model_validate(_read(path))

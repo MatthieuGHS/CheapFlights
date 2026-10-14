@@ -1,31 +1,18 @@
 # Configuration de Cheap Hops. Les réglages faits dans l'UI vont dans config.local.yaml
 # (non versionné), jamais ici. Valeurs estimées marquées « # à ajuster ».
 
-db_path: data/cheaphops.db
 log_level: INFO
-
-http:
-  # le rate limit est par source, dans recipes/<source>/v<N>/manifest.yaml
-  timeout_s: 20
-  vary_headers: [accept-language, x-currency, currency]  # à ajuster par source si besoin
-  explore_ttl_s: 21600     # 6 h (calendriers, routes)
-  verify_ttl_s: 900        # 15 min (vols détaillés)
-  max_attempts: 4          # par requête, montées de rung et 429 compris
-  rate_limited_backoff_s: 10   # à ajuster
-  blocked_backoff_s: 3600      # à ajuster
-  block_markers: [Access Denied, Request unsuccessful, _Incapsula_Resource, Pardon Our Interruption]  # à ajuster
-  # signatures de murs, jamais le mot nu « captcha » : un site normal cite reCAPTCHA dans ses mentions
-  captcha_markers: [captcha-delivery, challenge-platform, cf-turnstile, px-captcha, hcaptcha.com/1/api]  # à ajuster
-  impersonate: chrome
-  browser_dir: data/browser
 
 lastminute:
   origins: [VNO, KUN, RIX]
   days: 10                 # départs de J+0 à J+10
   max_nights: 3
   top: 30                  # lignes affichées par tableau
-  return_candidates: 8     # destinations dont on va chercher le vol retour (1 requête chacune)
-  request_budget: 60       # requêtes réseau max par recherche, toutes sources
+  optional_origins: [WAW, GDN, TLL]   # ajoutées avec --origins ; bus depuis Vilnius dans ground.yaml
+  return_below_eur: 30     # retour cherché (1 requête Ryanair) si l'aller coûte moins que ça
+  wizz_routes: 30          # routes Wizz dont on lit les prix par jour (farechart, 1 POST chacune)
+  pause_s: [0.3, 0.9]      # pause aléatoire entre deux requêtes d'une même source
+  request_budget: 150      # requêtes réseau max par recherche, toutes sources
   google:                  # complément : compagnies que Ryanair/Wizz ne couvrent pas
     destinations: [WAW, CPH, HEL, FRA]
     dates: 2               # origines x destinations x dates = requêtes

@@ -16,10 +16,10 @@ from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from cheaphops.core.config import LastMinute, load_config
+from cheaphops.core.config import Ground, LastMinute, load_config, load_ground
 from cheaphops.lastminute.run import Emit, Result, run
 
-SearchFn = Callable[[LastMinute, date, Emit], Awaitable[Result]]
+SearchFn = Callable[[LastMinute, Ground, date, Emit], Awaitable[Result]]
 WEB_DIST = Path(__file__).parent.parent.parent / "web" / "dist"
 
 
@@ -47,6 +47,7 @@ class Run:
 
 def create_app(
     config_path: Path = Path("config.yaml"),
+    ground_path: Path = Path("ground.yaml"),
     search: SearchFn = run,
     today: Callable[[], date] = date.today,
 ) -> FastAPI:
@@ -55,7 +56,7 @@ def create_app(
 
     async def execute(r: Run) -> None:
         try:
-            r.result = await search(r.params, today(), r.push)
+            r.result = await search(r.params, load_ground(ground_path), today(), r.push)
         except Exception as e:  # une recherche qui plante ne doit pas tuer le serveur
             r.error = f"{type(e).__name__}: {e}"
         finally:

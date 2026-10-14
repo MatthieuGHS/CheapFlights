@@ -65,6 +65,7 @@ export default function App() {
         <label>
           Origines
           <input value={origins} onChange={(e) => setOrigins(e.target.value)} className="ml-1 w-40 rounded border px-2 py-1" />
+          {config && <span className="ml-1 text-stone-500">optionnels : {config.optional_origins.join(', ')}</span>}
         </label>
         <button disabled={running || !config} className="rounded bg-stone-900 px-4 py-1.5 text-white disabled:opacity-50 dark:bg-stone-100 dark:text-stone-900">
           {running ? 'Recherche…' : 'Chercher'}
