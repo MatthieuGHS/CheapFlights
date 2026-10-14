@@ -37,13 +37,11 @@ class FetchFailed(Exception):
         self.outcome, self.result = outcome, result
 
 
-def allowed_domain(url: str, domains: list[str]) -> str | None:
-    """Entrée de l'allowlist qui couvre `url` (hôte égal ou sous-domaine, https seulement)."""
+def is_allowed(url: str, domains: list[str]) -> bool:
+    """https uniquement, hôte égal à un domaine de l'allowlist ou sous-domaine de celui-ci."""
     parts = urlsplit(url)
     host = (parts.hostname or "").lower()
-    if parts.scheme != "https":
-        return None
-    return next((d for d in domains if host == d or host.endswith("." + d)), None)
+    return parts.scheme == "https" and any(host == d or host.endswith("." + d) for d in domains)
 
 
 def registrable_domain(url: str) -> str:
@@ -191,12 +189,12 @@ class CtxHttp:
         raise FetchFailed(self._manifest.source, "too many redirects", None)
 
     def _check_allowed(self, url: str) -> None:
-        if allowed_domain(url, self._manifest.allowed_domains) is None:
+        if not is_allowed(url, self._manifest.allowed_domains):
             raise DomainNotAllowed(f"{self._manifest.source}: {url}")
 
     def _check_hop(self, rung: int, url: str, latency: float) -> None:
         """Une redirection hors allowlist compte comme un échec : souvent un mur anti-bot."""
-        if allowed_domain(url, self._manifest.allowed_domains) is None:
+        if not is_allowed(url, self._manifest.allowed_domains):
             self._record(rung, "redirect off allowlist", latency)
             raise DomainNotAllowed(f"{self._manifest.source}: {url}")
 

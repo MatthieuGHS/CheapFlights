@@ -3,6 +3,8 @@ version: 1
 capabilities: [routes, calendar, day_flights, booking_url]
 allowed_domains: [ryanair.com]
 # La disponibilité refuse (409) les sessions amorcées sur l'accueil : il faut la page de sélection.
+# shortcut: date fixe (2026-11-13), page de recherche passée ensuite ; vérifier en live avant cette
+# date qu'elle pose encore les cookies, sinon générer l'URL avec une date future
 home_url: https://www.ryanair.com/gb/en/trip/flights/select?adults=1&teens=0&children=0&infants=0&dateOut=2026-11-13&isReturn=false&originIata=VNO&destinationIata=BGY
 preferred_rung: 3   # la disponibilité exige les cookies d'une session navigateur (409 sinon)
 block_markers: [Availability declined]   # 409 renvoyé aux appels API jugés automatisés

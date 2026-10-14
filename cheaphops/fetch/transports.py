@@ -139,9 +139,10 @@ class BrowserTransport:
             str(self._cfg.browser_dir / self._manifest.source),
             headless=self._cfg.browser_headless,
         )
-        self._page = await self._ctx.new_page()
-        await self._page.goto(self._manifest.home_url, timeout=self._cfg.timeout_s * 1000)
-        return self._page
+        page = await self._ctx.new_page()
+        await page.goto(self._manifest.home_url, timeout=self._cfg.timeout_s * 1000)
+        self._page = page  # seulement une fois la page chargée, avec les cookies du site
+        return page
 
     async def aclose(self) -> None:
         if self._ctx is not None:

@@ -4,9 +4,11 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 import pytest
+import yaml
 
 from cheaphops.core.config import load_config
-from cheaphops.fetch.transports import CurlTransport, HttpxTransport
+from cheaphops.core.models import Manifest
+from cheaphops.fetch.transports import BrowserTransport, CurlTransport, HttpxTransport
 from cheaphops.fetch.types import HttpRequest, Transport
 
 pytestmark = pytest.mark.anyio
@@ -68,3 +70,18 @@ async def test_redirect_not_followed(base: str, transport: Transport) -> None:
     r = await transport.send(HttpRequest.build("GET", f"{base}/redirect"))
     await transport.aclose()
     assert (r.status, r.header("location")) == (302, "/elsewhere")
+
+
+async def test_browser_rung_fetches_from_the_page(base: str, tmp_path: Path) -> None:
+    ryanair = Path(__file__).parent.parent / "cheaphops/recipes/ryanair/v1/manifest.yaml"
+    manifest = Manifest.model_validate(yaml.safe_load(ryanair.read_text()))
+    # model_copy ne revalide pas : le manifeste exige https, le serveur de test est en http local
+    local = manifest.model_copy(update={"source": "local", "home_url": f"{base}/home"})
+    t = BrowserTransport(CFG.model_copy(update={"browser_dir": tmp_path}), local)
+    try:
+        got = await t.send(HttpRequest.build("GET", f"{base}/x", params={"d": "BGY"}))
+        posted = await t.send(HttpRequest.build("POST", f"{base}/p", json_body={"a": 1}))
+    finally:
+        await t.aclose()
+    assert (got.status, got.rung, got.json()) == (200, 4, {"path": "/x?d=BGY"})
+    assert posted.json() == {"a": 1}
