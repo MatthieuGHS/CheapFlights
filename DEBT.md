@@ -3,12 +3,12 @@
 Généré par `/ponytail-debt` : un raccourci = un commentaire `shortcut:` dans le code.
 À régénérer en fin de phase.
 
-## Marqueurs `shortcut:` (ledger `/ponytail-debt`, fin de 1b)
+## Marqueurs `shortcut:` (ledger `/ponytail-debt`, fin de 1c)
 
 Les phases 3 à 5 sont en pause : les déclencheurs qui les citaient visent désormais les skills
 projet ou un symptôme observable.
 
-- `cheaphops/fetch/http.py:235`. SQLite synchrone dans l'event loop. Plafond : un utilisateur.
+- `cheaphops/fetch/http.py:247`. SQLite synchrone dans l'event loop. Plafond : un utilisateur.
   Déclencheur : la latence SSE de la phase 2 en souffre, alors `asyncio.to_thread`.
 - `cheaphops/core/models.py:17`. Le regex `Domain` accepte un suffixe public (`co.uk`).
   Déclencheur : le skill `add-source` écrit un manifeste ; passer alors par la Public Suffix List
@@ -18,10 +18,15 @@ projet ou un symptôme observable.
   générer l'URL avec une date future.
 - `cheaphops/fetch/ladder.py:45`. Heuristique déterministe du rung de départ. Déclencheur : des
   rungs qui oscillent d'une recherche à l'autre (Thompson sampling, ex-phase 5).
-- `cheaphops/search/planner.py:10`. Budget de requêtes en arrêt net. Déclencheur : des
-  recherches qui épuisent le budget avant le Verify (bandit sur l'historique, ex-phase 5).
+- `cheaphops/search/planner.py:8`. Budget en arrêt net. Déclencheur : des recherches qui
+  épuisent le budget avant d'avoir couvert les routes utiles (bandit, ex-phase 5).
+- `cheaphops/search/engine.py:178`. Ordre d'exploration : destinations multi-origines puis
+  alphabétique. Déclencheur : même symptôme que le budget ; trier par prix historique.
+- `cheaphops/search/candidates.py:84`. Regroupement par ville limité aux overrides de
+  `ground.yaml`. Déclencheur : une destination dont les aéroports ne sont pas regroupés
+  (rayon via OurAirports).
 
-5 marqueurs, 0 sans déclencheur.
+7 marqueurs, 0 sans déclencheur.
 
 ## Phase 1a, soldé
 
