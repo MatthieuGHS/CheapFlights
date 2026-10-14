@@ -6,6 +6,7 @@ from typing import Annotated, Literal, Self
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, StringConstraints, model_validator
 
 Iata = Annotated[str, StringConstraints(pattern=r"^[A-Z]{3}$")]
+Domain = Annotated[str, StringConstraints(pattern=r"^[a-z0-9-]+(\.[a-z0-9-]+)+$")]
 Currency = Annotated[str, StringConstraints(pattern=r"^[A-Z]{3}$")]
 Price = Annotated[Decimal, Field(ge=0)]
 Hours = Annotated[float, Field(ge=0)]
@@ -139,7 +140,7 @@ class Manifest(Model):
     source: str
     version: Annotated[int, Field(ge=1)]
     capabilities: Annotated[set[Capability], Field(min_length=1)]
-    allowed_domains: Annotated[list[str], Field(min_length=1)]
+    allowed_domains: Annotated[list[Domain], Field(min_length=1)]
     preferred_rung: Annotated[int, Field(ge=1, le=4)]
     rate_limit: RateLimit
     status: RecipeStatus

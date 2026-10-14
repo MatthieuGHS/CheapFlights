@@ -4,7 +4,15 @@ from decimal import Decimal
 import pytest
 from pydantic import ValidationError
 
-from cheaphops.core.models import Blackout, DayFare, Flight, GroundEdge
+from cheaphops.core.models import (
+    Blackout,
+    DayFare,
+    Flight,
+    GroundEdge,
+    Manifest,
+    RateLimit,
+    RecipeStatus,
+)
 
 T0 = datetime(2026, 11, 6, 6, 0, tzinfo=UTC)
 
@@ -50,3 +58,13 @@ def test_blackout_and_ground_edge_invariants() -> None:
         Blackout(start=datetime(2026, 12, 2), end=datetime(2026, 12, 1))
     with pytest.raises(ValidationError):
         GroundEdge(a="VNO", b="VNO", duration_min=1, cost_eur=Decimal(0), margin_min=0)
+
+
+@pytest.mark.parametrize("domain", ["com", "Ryanair.com", "ryanair.com/", ".ryanair.com", ""])
+def test_manifest_rejects_domains_that_widen_the_allowlist(domain: str) -> None:
+    with pytest.raises(ValidationError):
+        Manifest(
+            source="x", version=1, capabilities={"calendar"}, allowed_domains=[domain],
+            preferred_rung=1, rate_limit=RateLimit(min_interval_s=1, jitter_s=0),
+            status=RecipeStatus.DRAFT,
+        )  # fmt: skip

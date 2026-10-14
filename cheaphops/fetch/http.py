@@ -148,6 +148,7 @@ class CtxHttp:
 
     def _store(self, key: str, r: FetchResult, ttl_s: int) -> None:
         now = self._now()
+        self._conn.execute("DELETE FROM http_cache WHERE expires_at <= ?", (now,))
         self._conn.execute(
             "INSERT OR REPLACE INTO http_cache VALUES (?, ?, ?, ?, ?, ?, ?)",
             (key, r.url, r.status, json.dumps(r.headers), r.text, now, now + ttl_s),

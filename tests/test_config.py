@@ -38,7 +38,7 @@ def test_local_overrides_merge_without_touching_config_yaml(tmp_path: Path) -> N
     (tmp_path / "config.yaml").write_text(base)
     local = tmp_path / "config.local.yaml"
     local.write_text("search:\n  defaults:\n    max_nights: 5\nllm:\n  caps:\n    total_usd: 10\n")
-    cfg = load_config(tmp_path / "config.yaml", local)
+    cfg = load_config(tmp_path / "config.yaml")  # config.local.yaml voisin trouvé seul
     assert cfg.search.defaults.max_nights == 5
     assert cfg.search.defaults.top_k == 30
     assert cfg.llm.caps.total_usd == Decimal(10)

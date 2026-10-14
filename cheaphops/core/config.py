@@ -104,11 +104,10 @@ def _read(path: Path) -> dict[str, Any]:
     return data
 
 
-def load_config(
-    path: Path = Path("config.yaml"), local: Path = Path("config.local.yaml")
-) -> Config:
-    """config.yaml, puis les overrides de l'UI (config.local.yaml) par-dessus s'il existe."""
+def load_config(path: Path = Path("config.yaml"), local: Path | None = None) -> Config:
+    """config.yaml, puis les overrides de l'UI (config.local.yaml voisin) par-dessus s'il existe."""
     data = _read(path)
+    local = local or path.with_name("config.local.yaml")
     if local.exists():
         data = _merge(data, _read(local))
     return Config.model_validate(data)

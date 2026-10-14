@@ -161,3 +161,13 @@ async def test_other_domain_not_throttled_by_first(clock: FakeClock) -> None:
     await throttle.wait("ryanair.com", MANIFEST.rate_limit)
     await throttle.wait("wizzair.com", MANIFEST.rate_limit)
     assert clock.slept == []
+
+
+async def test_store_purges_expired_entries(conn: sqlite3.Connection, clock: FakeClock) -> None:
+    transport, _ = counting()
+    async with make(conn, clock, transport) as http:
+        await http.get("https://www.ryanair.com/old", ttl_s=10)
+        clock.t += 11
+        await http.get("https://www.ryanair.com/new", ttl_s=10)
+    urls = [r[0] for r in conn.execute("SELECT url FROM http_cache")]
+    assert urls == ["https://www.ryanair.com/new"]
