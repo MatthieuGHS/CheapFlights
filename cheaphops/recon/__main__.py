@@ -3,6 +3,7 @@ réponses JSON qui contiennent des codes IATA (et des prix, sauf pour l'objectif
 
 import argparse
 import asyncio
+import contextlib
 import json
 import sys
 from datetime import UTC, datetime
@@ -36,7 +37,11 @@ async def capture(
             return
         req = resp.request
         headers = await req.all_headers()
-        captured.append(Captured(resp.url, req.method, headers, req.post_data, resp.status, body))
+        try:
+            post = req.post_data
+        except UnicodeDecodeError:  # corps binaire (capteur anti-bot…) : pas une API de données
+            post = None
+        captured.append(Captured(resp.url, req.method, headers, post, resp.status, body))
 
     def count(_: Any) -> None:
         nonlocal sent
@@ -63,10 +68,17 @@ async def capture(
         for label in clicks:  # scénario minimal : bandeau cookies, bouton « rechercher »…
             await page.get_by_text(label, exact=True).first.click(timeout=10_000)
             await page.wait_for_load_state("networkidle")
-        await page.wait_for_timeout(wait_s * 1000)  # mode headed : le temps de naviguer à la main
-        text = await page.inner_text("body")
-        await asyncio.gather(*tasks)
-        await browser.close()
+        # headed : fermer la fenêtre termine la capture, sinon `--wait` secondes. Exception : le
+        # timeout n'a pas la même classe selon Playwright / patchright
+        with contextlib.suppress(Exception):
+            await page.wait_for_event("close", timeout=wait_s * 1000)
+        text = "" if page.is_closed() else await page.inner_text("body")
+        # une réponse illisible ne doit jamais faire perdre toute la capture (navigation manuelle)
+        for err in await asyncio.gather(*tasks, return_exceptions=True):
+            if isinstance(err, Exception):
+                print(f"réponse ignorée : {type(err).__name__}: {err}", file=sys.stderr)
+        if browser.is_connected():
+            await browser.close()
     return captured, text, sent, document
 
 
@@ -76,7 +88,12 @@ def main() -> int:
     ap.add_argument("--goal", required=True, help="ex. calendar, day_flights, routes")
     ap.add_argument("--out", type=Path)
     ap.add_argument("--headed", action="store_true")
-    ap.add_argument("--wait", type=float, default=3.0, help="secondes après le chargement")
+    ap.add_argument(
+        "--wait",
+        type=float,
+        default=3.0,
+        help="secondes max après le chargement (headed : fermer la fenêtre termine plus tôt)",
+    )
     ap.add_argument(
         "--click", action="append", default=[], help="texte exact à cliquer, dans l'ordre"
     )
