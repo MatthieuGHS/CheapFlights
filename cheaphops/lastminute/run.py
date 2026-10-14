@@ -63,7 +63,7 @@ async def run(
     bus = {o: ground.cost(o) for o in origins}
     reports: dict[str, SourceReport] = {}
     modes: dict[str, str] = {}
-    rates: Fx = fx or await asyncio.to_thread(load_fx)
+    rates = fx if fx is not None else await asyncio.to_thread(load_fx)
 
     def pause() -> None:  # appelé depuis les threads des sources : time.sleep ne bloque que le leur
         time.sleep(random.uniform(*cfg.pause_s))
