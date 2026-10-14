@@ -8,6 +8,7 @@ from cheaphops.core.config import Ground, load_config
 from cheaphops.lastminute import generic, sources
 from cheaphops.lastminute import run as run_mod
 from cheaphops.lastminute.fares import (
+    Bus,
     Deal,
     Fare,
     best_per_destination,
@@ -33,8 +34,8 @@ def test_cheapest_oneways_dedupes_same_line_across_sources() -> None:
         fare("VNO", "BGY", "2026-10-20", "25", src="google"),
     )
     c = fare("VNO", "ATH", "2026-10-21", "40")
-    assert cheapest_oneways([a, b, c], 10, {}) == [b, c]
-    assert cheapest_oneways([a, b, c], 1, {}) == [b]
+    assert cheapest_oneways([a, b, c], 10) == [b, c]
+    assert cheapest_oneways([a, b, c], 1) == [b]
 
 
 def test_roundtrip_mixes_airlines_and_open_jaw_within_nights() -> None:
@@ -96,14 +97,15 @@ def test_parse_farechart_keeps_priced_days_of_both_directions() -> None:
     assert sources.parse_farechart("blocked", FX) == []
 
 
-def test_ground_cost_is_added_and_reorders() -> None:
-    bus = {"KUN": Decimal(10), "RIX": Decimal(15)}
+def test_bus_is_information_only_never_added_to_totals_or_ranking() -> None:
+    bus = {"KUN": Bus(Decimal(10), 100), "RIX": Bus(Decimal(15), 270)}
     a = fare("VNO", "BGY", "2026-10-20", "20")
-    b = fare("KUN", "BGY", "2026-10-20", "12")  # 12 + 10 bus > 20
-    assert cheapest_oneways([a, b], 2, bus) == [a, b]
+    b = fare("KUN", "BGY", "2026-10-20", "12")  # moins cher, malgré 10 € de bus
+    assert cheapest_oneways([a, b], 2) == [b, a]
     back = fare("BGY", "RIX", "2026-10-22", "10")
     (t,) = roundtrips([b], [back], 3, bus)
-    assert (t.ground, t.total) == (Decimal(25), Decimal(47))
+    assert t.total == Decimal(22)  # 12 + 10 : vols seulement
+    assert (t.bus.cost, t.bus.minutes) == (Decimal(25), 370)  # affiché à part
 
 
 PATTERN = (
@@ -209,7 +211,7 @@ def test_dated_deal_becomes_a_bundled_roundtrip_in_the_same_ranking() -> None:
         "kayak-explore", "VNO -> MIL", "VNO", "MIL", Decimal("33.05"), "https://k/2",
         None, date(2026, 11, 6), date(2026, 11, 9), "Ryanair",
     )  # fmt: skip
-    trips = bundled_roundtrips([deal, twin, far], {"VNO"}, 3, {"VNO": Decimal(0)})
+    trips = bundled_roundtrips([deal, twin, far], {"VNO"}, 3, {"VNO": Bus(Decimal(0), 0)})
     assert [(t.total, t.nights, t.bundled) for t in trips] == [(Decimal("33.05"), 3, True)]
     pair = roundtrips([fare("VNO", "ATH", "2026-11-06", "20")],
                       [fare("ATH", "VNO", "2026-11-08", "15")], 3, {})  # fmt: skip

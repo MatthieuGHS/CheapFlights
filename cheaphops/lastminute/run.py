@@ -19,6 +19,7 @@ from ryanair import Ryanair
 from cheaphops.core.config import Ground, LastMinute
 from cheaphops.lastminute import generic, sources
 from cheaphops.lastminute.fares import (
+    Bus,
     Deal,
     Fare,
     RoundTrip,
@@ -50,6 +51,7 @@ class Result:
     roundtrips: list[RoundTrip]  # la meilleure combinaison par destination
     alternatives: dict[str, list[RoundTrip]]  # toutes les dates des destinations affichées
     deals: list[Deal]  # bons plans sans date
+    bus: dict[str, Bus]  # bus depuis le domicile par aéroport d'origine (info)
     requests: int
     seconds: float
     sources: dict[str, SourceReport] = field(default_factory=dict)
@@ -78,8 +80,11 @@ async def run(
     start = time.monotonic()
     d0, d1 = today, today + timedelta(days=cfg.days)
     origins = set(cfg.origins)
-    bus = {o: ground.cost(o) for o in origins}
-    ground_by_airport = bus
+    bus = {
+        o: Bus(ground.buses[o].cost_eur, ground.buses[o].duration_min)
+        for o in origins
+        if o in ground.buses
+    }  # information seulement : jamais dans les totaux
     reports: dict[str, SourceReport] = {}
     modes: dict[str, str] = {}
     rates = fx if fx is not None else await asyncio.to_thread(load_fx)
@@ -202,7 +207,7 @@ async def run(
     undated = {(d.origin, d.destination, d.price): d for d in deals if d not in dated}
     best_deals = sorted(undated.values(), key=lambda d: d.price)[: cfg.top]
     trips = roundtrips(outs, backs, cfg.max_nights, bus)
-    trips += bundled_roundtrips(dated, origins, cfg.max_nights, ground_by_airport)
+    trips += bundled_roundtrips(dated, origins, cfg.max_nights, bus)
     ranked = best_per_destination(trips)[: cfg.top]
     shown = {t.out.destination for t in ranked}
     alternatives = {
@@ -211,10 +216,11 @@ async def run(
         if dest in shown
     }
     result = Result(
-        cheapest_oneways(outs, cfg.oneways_max, bus),
+        cheapest_oneways(outs, cfg.oneways_max),
         ranked,
         alternatives,
         best_deals,
+        bus,
         total,
         time.monotonic() - start,
         reports,

@@ -1,6 +1,6 @@
 # Trajets sol depuis le domicile, aller simple. Coût et durée : estimations de bus (FlixBus,
-# Lux Express, Ecolines), à ajuster. Le coût s'ajoute au prix des vols : une fois pour un
-# départ depuis cet aéroport, une fois pour un retour qui y atterrit.
+# Lux Express, Ecolines), à ajuster. INFORMATION SEULEMENT : affichés à côté des résultats, jamais
+# additionnés au prix des vols (totaux et classement = billets d'avion uniquement).
 home: VNO
 buses:
   KUN: {cost_eur: 10, duration_min: 100}

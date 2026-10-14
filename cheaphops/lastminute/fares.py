@@ -5,7 +5,19 @@ from datetime import date, datetime, timedelta
 from decimal import Decimal
 
 SAME_DAY_GAP = timedelta(hours=6)  # retour le jour même : les horaires d'arrivée manquent
-Ground = dict[str, Decimal]  # aéroport -> bus aller simple depuis le domicile
+
+
+@dataclass(frozen=True)
+class Bus:
+    """Trajet sol domicile -> aéroport, aller simple. Information seulement : jamais additionné
+    au prix des vols, ni dans les totaux ni dans le classement."""
+
+    cost: Decimal
+    minutes: int
+
+
+NO_BUS = Bus(Decimal(0), 0)
+Ground = dict[str, Bus]  # aéroport -> bus depuis le domicile
 
 
 @dataclass(frozen=True)
@@ -44,27 +56,32 @@ class Deal:
 class RoundTrip:
     out: Fare
     back: Fare
-    ground: Decimal  # bus du domicile à l'aéroport de départ + de l'aéroport d'arrivée au domicile
+    bus: Bus  # info : bus domicile -> départ + arrivée -> domicile (coût et durée cumulés)
     bundled: bool = False  # tarif aller-retour unique (Kayak) : `back.price` vaut 0
 
     @property
     def total(self) -> Decimal:
-        return self.out.price + self.back.price + self.ground
+        return self.out.price + self.back.price  # vols seulement
 
     @property
     def nights(self) -> int:
         return (self.back.day - self.out.day).days
 
 
-def cheapest_oneways(fares: list[Fare], top: int, ground: Ground) -> list[Fare]:
-    """Le moins cher par (origine, destination, jour), bus compris pour le classement : une
-    même ligne vue par deux sources ne compte qu'une fois."""
+def _bus(ground: Ground, start: str, end: str) -> Bus:
+    a, b = ground.get(start, NO_BUS), ground.get(end, NO_BUS)
+    return Bus(a.cost + b.cost, a.minutes + b.minutes)
+
+
+def cheapest_oneways(fares: list[Fare], top: int) -> list[Fare]:
+    """Le moins cher par (origine, destination, jour) : une même ligne vue par deux sources ne
+    compte qu'une fois."""
     best: dict[tuple[str, str, date], Fare] = {}
     for f in fares:
         k = (f.origin, f.destination, f.day)
         if k not in best or f.price < best[k].price:
             best[k] = f
-    ranked = sorted(best.values(), key=lambda f: (f.price + ground.get(f.origin, 0), f.departure))
+    ranked = sorted(best.values(), key=lambda f: (f.price, f.departure))
     return ranked[:top]
 
 
@@ -76,7 +93,7 @@ def roundtrips(
     retour, retour au plus `max_nights` nuits après l'aller. `outs` part des origines, `backs`
     arrive aux origines."""
     pairs = [
-        RoundTrip(o, b, ground.get(o.origin, Decimal(0)) + ground.get(b.destination, Decimal(0)))
+        RoundTrip(o, b, _bus(ground, o.origin, b.destination))
         for o in outs
         for b in backs
         if o.destination == b.origin
@@ -120,7 +137,7 @@ def bundled_roundtrips(
         back_day = datetime.combine(d.back, datetime.min.time())
         back = Fare(d.source, d.airline or d.source, d.destination, d.origin, back_day,
                     Decimal(0), None, d.url)  # fmt: skip
-        trips.append(RoundTrip(out, back, ground.get(d.origin, Decimal(0)) * 2, bundled=True))
+        trips.append(RoundTrip(out, back, _bus(ground, d.origin, d.origin), bundled=True))
     return trips
 
 

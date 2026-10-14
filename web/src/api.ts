@@ -25,10 +25,13 @@ const Fare = z.object({
 })
 export type Fare = z.infer<typeof Fare>
 
+const Bus = z.object({ cost: z.number(), minutes: z.number() })
+export type Bus = z.infer<typeof Bus>
+
 export const RoundTrip = z.object({
   out: Fare,
   back: Fare,
-  ground: z.number(),
+  bus: Bus,
   bundled: z.boolean(),
 })
 export type RoundTrip = z.infer<typeof RoundTrip>
@@ -49,6 +52,7 @@ const Result = z.object({
   ),
   roundtrips: z.array(RoundTrip),
   alternatives: z.record(z.string(), z.array(RoundTrip)),
+  bus: z.record(z.string(), Bus),
   requests: z.number(),
   seconds: z.number(),
   sources: z.record(

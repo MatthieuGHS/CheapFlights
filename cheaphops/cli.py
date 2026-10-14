@@ -46,10 +46,17 @@ def render(r: Result, top: int = 10, all_dates: bool = False) -> str:
     return "\n".join(lines)
 
 
+def _bus(t: RoundTrip) -> str:
+    b = t.bus
+    return f"  [bus info : {b.cost} € / {b.minutes // 60} h {b.minutes % 60:02d}]" if b.cost else ""
+
+
 def _trip(t: RoundTrip) -> str:
     if t.bundled:
-        return f"  {t.total} € / {t.nights} n : {_fare(t.out)} (aller-retour, {t.back.day:%d/%m})"
-    return f"  {t.total} € / {t.nights} n : {_fare(t.out)} | {_fare(t.back)}"
+        legs = f"{_fare(t.out)} (aller-retour, {t.back.day:%d/%m})"
+    else:
+        legs = f"{_fare(t.out)} | {_fare(t.back)}"
+    return f"  {t.total} € (vols) / {t.nights} n : {legs}{_bus(t)}"
 
 
 def main(argv: list[str] | None = None) -> int:

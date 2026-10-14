@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import type { Fare, Result, RoundTrip } from './api'
+import type { Bus, Fare, Result, RoundTrip } from './api'
 
 const when = (f: Fare) => {
   const d = new Date(f.departure)
@@ -25,15 +25,24 @@ const Leg = ({ f }: { f: Fare }) => (
   </span>
 )
 
-const total = (t: RoundTrip) => t.out.price + t.back.price + t.ground
+const total = (t: RoundTrip) => t.out.price + t.back.price // vols seulement
+const hours = (b: Bus) => `${Math.floor(b.minutes / 60)} h ${String(b.minutes % 60).padStart(2, '0')}`
+const BusInfo = ({ b }: { b: Bus }) =>
+  b.cost > 0 ? (
+    <span className="text-stone-500">
+      bus : {b.cost.toFixed(0)} € · {hours(b)} (hors total)
+    </span>
+  ) : null
 const nights = (t: RoundTrip) =>
   Math.round((Date.parse(t.back.departure.slice(0, 10)) - Date.parse(t.out.departure.slice(0, 10))) / 864e5)
 
 function Trip({ t }: { t: RoundTrip }) {
   return (
     <>
-      <strong>{total(t).toFixed(2)} €</strong> · {nights(t)} nuit{nights(t) > 1 ? 's' : ''}
-      {t.ground > 0 && <span className="text-stone-500"> (bus {t.ground.toFixed(0)} € inclus)</span>}
+      <strong>{total(t).toFixed(2)} €</strong> vols · {nights(t)} nuit{nights(t) > 1 ? 's' : ''}
+      <span className="ml-3 text-sm">
+        <BusInfo b={t.bus} />
+      </span>
       <div className="text-sm">
         <Leg f={t.out} />
       </div>
@@ -130,6 +139,11 @@ export function Results({ result }: { result: Result }) {
             {oneways.map((f) => (
               <li key={f.source + f.origin + f.destination + f.departure + f.price}>
                 <strong>{f.price.toFixed(2)} €</strong> · <Leg f={f} />
+                {result.bus[f.origin] && (
+                  <span className="ml-3">
+                    <BusInfo b={result.bus[f.origin]!} />
+                  </span>
+                )}
               </li>
             ))}
           </ul>
