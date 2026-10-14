@@ -1,0 +1,20 @@
+{
+ "isRescueFare": false,
+ "adultCount": 1,
+ "childCount": 0,
+ "dayInterval": 9,
+ "wdc": false,
+ "isFlightChange": false,
+ "flightList": [
+  {
+   "departureStation": "VNO",
+   "arrivalStation": "LTN",
+   "date": "2026-11-13T00:00:00"
+  },
+  {
+   "departureStation": "LTN",
+   "arrivalStation": "VNO",
+   "date": "2026-11-16T00:00:00"
+  }
+ ]
+}

@@ -65,7 +65,7 @@ def test_manifest_rejects_domains_that_widen_the_allowlist(domain: str) -> None:
     with pytest.raises(ValidationError):
         Manifest(
             source="x", version=1, capabilities={"calendar"}, allowed_domains=[domain],
-            home_url="https://www.ryanair.com/", block_markers=[],
+            home_url="https://www.ryanair.com/", block_markers=[], headed=False, cookie_headers={},
             preferred_rung=1, rate_limit=RateLimit(min_interval_s=1, jitter_s=0),
             status=RecipeStatus.DRAFT,
         )  # fmt: skip
@@ -79,6 +79,7 @@ def test_blackout_rejects_timezone_aware_bounds() -> None:
 def test_manifest_accepts_registrable_domain() -> None:
     Manifest(
         source="x", version=1, capabilities={"calendar"}, allowed_domains=["ryanair.com"],
-        home_url="https://www.ryanair.com/", block_markers=[], preferred_rung=1,
+        home_url="https://www.ryanair.com/", block_markers=[], headed=False, cookie_headers={},
+        preferred_rung=1,
         rate_limit=RateLimit(min_interval_s=1, jitter_s=0), status=RecipeStatus.DRAFT,
     )  # fmt: skip

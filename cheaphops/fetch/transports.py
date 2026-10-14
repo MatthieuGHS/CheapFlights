@@ -3,7 +3,7 @@
 1. httpx
 2. curl_cffi, empreinte TLS d'un vrai navigateur
 3. cookies amorcés par le navigateur furtif de Scrapling (StealthyFetcher), puis curl_cffi
-4. navigateur complet Playwright, requêtes faites depuis la page (fetch JS)
+4. navigateur complet (Chromium furtif patchright), requêtes faites depuis la page (fetch JS)
 
 Scrapling `Fetcher` n'est pas un rung : il repose sur curl_cffi, comme le rung 2.
 """
@@ -14,7 +14,9 @@ from typing import Any
 import curl_cffi
 import httpx
 from curl_cffi.requests import AsyncSession
-from playwright.async_api import BrowserContext, Page, Playwright, async_playwright
+
+# patchright : API de Playwright, Chromium sans les fuites d'automatisation (CDP) que Kasada repère
+from patchright.async_api import BrowserContext, Page, Playwright, async_playwright
 
 from cheaphops.core.config import HttpConfig
 from cheaphops.core.models import Manifest
@@ -108,15 +110,19 @@ class StealthCookieTransport:
             await self._curl.aclose()
 
 
-_FETCH_JS = """async ([url, method, headers, body]) => {
+_FETCH_JS = """async ([url, method, headers, body, cookieHeaders]) => {
+  const jar = Object.fromEntries(document.cookie.split("; ").map(c => {
+    const i = c.indexOf("="); return [c.slice(0, i), decodeURIComponent(c.slice(i + 1))];
+  }));
+  for (const [header, cookie] of cookieHeaders) if (jar[cookie]) headers[header] = jar[cookie];
   const r = await fetch(url, {method, headers, body, credentials: "include"});
   return {status: r.status, url: r.url, headers: [...r.headers.entries()], text: await r.text()};
 }"""
 
 
 class BrowserTransport:
-    """Rung 4 : Chromium avec profil persistant ; les requêtes partent de la page elle-même,
-    avec ses cookies, son empreinte et ses en-têtes anti-bot."""
+    """Rung 4 : Chromium furtif avec profil persistant ; les requêtes partent de la page
+    elle-même, avec ses cookies, son empreinte et les en-têtes ajoutés par le SDK anti-bot."""
 
     follows_redirects = True
 
@@ -132,7 +138,9 @@ class BrowserTransport:
             async with self._lock:
                 page = self._page or await self._open()
             body = req.body.decode() if req.body is not None else None
-            out = await page.evaluate(_FETCH_JS, [req.url, req.method, dict(req.headers), body])
+            cookie_headers = list(self._manifest.cookie_headers.items())
+            args = [req.url, req.method, dict(req.headers), body, cookie_headers]
+            out = await page.evaluate(_FETCH_JS, args)
         except Exception as e:  # erreurs Playwright : navigateur, réseau, JS
             raise TransportError(f"browser: {e}") from e
         headers = tuple((k, v) for k, v in out["headers"])
@@ -144,7 +152,7 @@ class BrowserTransport:
         self._pw = self._pw or await async_playwright().start()
         self._ctx = self._ctx or await self._pw.chromium.launch_persistent_context(
             str(self._cfg.browser_dir / self._manifest.source),
-            headless=self._cfg.browser_headless,
+            headless=self._cfg.browser_headless and not self._manifest.headed,
         )
         page = await self._ctx.new_page()
         await page.goto(self._manifest.home_url, timeout=self._cfg.timeout_s * 1000)

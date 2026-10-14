@@ -24,10 +24,12 @@ def classify(r: FetchResult, cfg: HttpConfig, source_markers: list[str]) -> Outc
     body = "" if ok and is_json else r.text[:50_000].lower()  # données servies : jamais un mur
     if any(m.lower() in body for m in cfg.captcha_markers):
         return Outcome.CAPTCHA
+    # avant le 429 : certains anti-bots (Kasada) répondent 429 avec une page de défi
+    if any(m.lower() in body for m in [*cfg.block_markers, *source_markers]):
+        return Outcome.BLOCKED
     if r.status == 429:
         return Outcome.RATE_LIMITED
-    markers = [*cfg.block_markers, *source_markers]
-    if r.status in (401, 403) or any(m.lower() in body for m in markers):
+    if r.status in (401, 403):
         return Outcome.BLOCKED
     return Outcome.OK if ok else Outcome.FAILED
 

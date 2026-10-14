@@ -1,0 +1,21 @@
+source: wizzair
+version: 1
+capabilities: [routes, calendar, day_flights, booking_url]
+allowed_domains: [wizzair.com]
+home_url: https://www.wizzair.com/en-gb
+# Kasada protège l'API (en-têtes x-kpsdk-* générés par le JS de la page) et renvoie 405 à tout
+# navigateur headless : seules les requêtes faites depuis une page Wizz visible passent.
+preferred_rung: 4
+headed: true
+# Jeton CSRF « double-submit » : posé en cookie par les premiers appels API de la page.
+cookie_headers: {x-requestverificationtoken: RequestVerificationToken}
+block_markers: [KPSDK]   # page de défi Kasada (servie en 429)
+rate_limit:
+  min_interval_s: 3.0   # à ajuster
+  jitter_s: 2.0         # à ajuster
+status: active
+# Endpoints découverts par recon headed le 2026-10-14 (data/recon/wizz-headed2) :
+# - routes : GET  /Api/asset/map (liaisons directes de toutes les stations)
+# - calendrier : POST /Api/asset/farechart (±dayInterval jours, aller et retour, wdc:false)
+# - vols du jour : POST /Api/search/search
+# Wizz regroupe VNO et KUN (« MAC ») : les réponses peuvent partir de l'autre aéroport.

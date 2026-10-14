@@ -1,0 +1,2722 @@
+{
+ "cities": [
+  {
+   "iata": "TIA",
+   "mac": null,
+   "longitude": 19.72083333333333,
+   "currencyCode": "ALL",
+   "latitude": 41.415,
+   "shortName": "Tirana",
+   "countryName": "Albania",
+   "countryCode": "AL",
+   "connections": [
+    {
+     "iata": "AGP",
+     "operationStartDate": "2026-10-14T17:25:00",
+     "rescueEndDate": "2026-10-14T11:53:08.5613894+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "AHO",
+     "operationStartDate": "2027-06-23T14:00:00",
+     "rescueEndDate": "2026-10-14T11:53:08.5613894+01:00",
+     "isDomestic": false,
+     "isNew": true,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "AOI",
+     "operationStartDate": "2026-10-14T05:50:00",
+     "rescueEndDate": "2026-10-14T11:53:08.5613894+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "ARN",
+     "operationStartDate": "2026-10-14T17:05:00",
+     "rescueEndDate": "2026-10-14T11:53:08.5613894+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "STO",
+     "operationStartDate": "2026-10-14T17:05:00",
+     "rescueEndDate": "2026-10-14T11:53:08.5613894+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "ATH",
+     "operationStartDate": "2026-10-14T06:50:00",
+     "rescueEndDate": "2026-10-14T11:53:08.5613894+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "BCN",
+     "operationStartDate": "2026-10-14T18:55:00",
+     "rescueEndDate": "2026-10-14T11:53:08.5613894+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "BER",
+     "operationStartDate": "2026-10-14T09:10:00",
+     "rescueEndDate": "2026-10-14T11:53:08.5613894+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "BGY",
+     "operationStartDate": "2026-10-14T11:05:00",
+     "rescueEndDate": "2026-10-14T11:53:08.5613894+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "MIL",
+     "operationStartDate": "2026-10-14T11:05:00",
+     "rescueEndDate": "2026-10-14T11:53:08.5613894+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "BLL",
+     "operationStartDate": "2026-10-17T05:55:00",
+     "rescueEndDate": "2026-10-14T11:53:08.5613894+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "BLQ",
+     "operationStartDate": "2026-10-14T06:00:00",
+     "rescueEndDate": "2026-10-14T11:53:08.5613894+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "BRI",
+     "operationStartDate": "2026-10-14T06:05:00",
+     "rescueEndDate": "2026-10-14T11:53:08.5613894+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "BTS",
+     "operationStartDate": "2026-10-14T08:10:00",
+     "rescueEndDate": "2026-10-14T11:53:08.5613894+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "BUD",
+     "operationStartDate": "2026-10-14T13:45:00",
+     "rescueEndDate": "2026-10-14T11:53:08.5613894+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "BVA",
+     "operationStartDate": "2026-10-14T05:55:00",
+     "rescueEndDate": "2026-10-14T11:53:08.5613894+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "PAR",
+     "operationStartDate": "2026-10-14T05:55:00",
+     "rescueEndDate": "2026-10-14T11:53:08.5613894+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "CGN",
+     "operationStartDate": "2026-10-15T19:30:00",
+     "rescueEndDate": "2026-10-14T11:53:08.5613894+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "CIA",
+     "operationStartDate": "2026-10-14T06:00:00",
+     "rescueEndDate": "2026-10-14T11:53:08.5613894+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "ROM",
+     "operationStartDate": "2026-10-14T06:00:00",
+     "rescueEndDate": "2026-10-14T11:53:08.5613894+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "CIY",
+     "operationStartDate": "2027-06-08T05:50:00",
+     "rescueEndDate": "2026-10-14T11:53:08.5613894+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "CRL",
+     "operationStartDate": "2026-10-14T06:10:00",
+     "rescueEndDate": "2026-10-14T11:53:08.5613894+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "CTA",
+     "operationStartDate": "2026-10-14T23:55:00",
+     "rescueEndDate": "2026-10-14T11:53:08.5613894+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "DTM",
+     "operationStartDate": "2026-10-14T12:20:00",
+     "rescueEndDate": "2026-10-14T11:53:08.5613894+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "EIN",
+     "operationStartDate": "2026-10-14T06:45:00",
+     "rescueEndDate": "2026-10-14T11:53:08.5613894+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "NLM",
+     "operationStartDate": "2026-10-14T06:45:00",
+     "rescueEndDate": "2026-10-14T11:53:08.5613894+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "FCO",
+     "operationStartDate": "2026-10-14T06:00:00",
+     "rescueEndDate": "2026-10-14T11:53:08.5613894+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "FKB",
+     "operationStartDate": "2026-10-15T18:05:00",
+     "rescueEndDate": "2026-10-14T11:53:08.5613894+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "FMM",
+     "operationStartDate": "2026-10-14T07:00:00",
+     "rescueEndDate": "2026-10-14T11:53:08.5613894+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "GDN",
+     "operationStartDate": "2026-10-15T08:30:00",
+     "rescueEndDate": "2026-10-14T11:53:08.5613894+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "GOA",
+     "operationStartDate": "2026-10-15T10:30:00",
+     "rescueEndDate": "2026-10-14T11:53:08.5613894+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "HAM",
+     "operationStartDate": "2026-10-14T13:05:00",
+     "rescueEndDate": "2026-10-14T11:53:08.5613894+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "HHN",
+     "operationStartDate": "2026-10-14T20:10:00",
+     "rescueEndDate": "2026-10-14T11:53:08.5613894+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "KRK",
+     "operationStartDate": "2026-10-15T13:15:00",
+     "rescueEndDate": "2026-10-14T11:53:08.5613894+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "KTW",
+     "operationStartDate": "2026-10-15T13:15:00",
+     "rescueEndDate": "2026-10-14T11:53:08.5613894+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "LGW",
+     "operationStartDate": "2026-10-14T11:40:00",
+     "rescueEndDate": "2026-10-14T11:53:08.5613894+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "LON",
+     "operationStartDate": "2026-10-14T11:40:00",
+     "rescueEndDate": "2026-10-14T11:53:08.5613894+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "LTN",
+     "operationStartDate": "2026-10-14T11:40:00",
+     "rescueEndDate": "2026-10-14T11:53:08.5613894+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "LYS",
+     "operationStartDate": "2026-10-15T05:50:00",
+     "rescueEndDate": "2026-10-14T11:53:08.5613894+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "MAD",
+     "operationStartDate": "2026-10-15T18:20:00",
+     "rescueEndDate": "2026-10-14T11:53:08.5613894+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "MLA",
+     "operationStartDate": "2026-10-14T20:55:00",
+     "rescueEndDate": "2026-10-14T11:53:08.5613894+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "MLH",
+     "operationStartDate": "2026-10-14T05:50:00",
+     "rescueEndDate": "2026-10-14T11:53:08.5613894+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "MMX",
+     "operationStartDate": "2026-10-15T19:40:00",
+     "rescueEndDate": "2026-10-14T11:53:08.5613894+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "MXP",
+     "operationStartDate": "2026-10-14T11:05:00",
+     "rescueEndDate": "2026-10-14T11:53:08.5613894+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "NAP",
+     "operationStartDate": "2026-10-14T07:15:00",
+     "rescueEndDate": "2026-10-14T11:53:08.5613894+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "NCE",
+     "operationStartDate": "2026-10-15T07:15:00",
+     "rescueEndDate": "2026-10-14T11:53:08.5613894+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "NUE",
+     "operationStartDate": "2026-10-15T20:35:00",
+     "rescueEndDate": "2026-10-14T11:53:08.5613894+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "PEG",
+     "operationStartDate": "2026-10-14T09:50:00",
+     "rescueEndDate": "2026-10-14T11:53:08.5613894+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "PMI",
+     "operationStartDate": "2027-06-22T13:40:00",
+     "rescueEndDate": "2026-10-14T11:53:08.5613894+01:00",
+     "isDomestic": false,
+     "isNew": true,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "PMO",
+     "operationStartDate": "2026-10-27T16:15:00",
+     "rescueEndDate": "2026-10-14T11:53:08.5613894+01:00",
+     "isDomestic": false,
+     "isNew": true,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "POZ",
+     "operationStartDate": "2027-06-21T19:10:00",
+     "rescueEndDate": "2026-10-14T11:53:08.5613894+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "PRG",
+     "operationStartDate": "2026-10-14T15:35:00",
+     "rescueEndDate": "2026-10-14T11:53:08.5613894+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "PSA",
+     "operationStartDate": "2026-10-14T10:30:00",
+     "rescueEndDate": "2026-10-14T11:53:08.5613894+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "PSR",
+     "operationStartDate": "2026-10-14T13:15:00",
+     "rescueEndDate": "2026-10-14T11:53:08.5613894+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "QSR",
+     "operationStartDate": "2027-06-06T07:15:00",
+     "rescueEndDate": "2026-10-14T11:53:08.5613894+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "RDO",
+     "operationStartDate": "2026-10-14T18:05:00",
+     "rescueEndDate": "2026-10-14T11:53:08.5613894+01:00",
+     "isDomestic": false,
+     "isNew": true,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "WSW",
+     "operationStartDate": "2026-10-14T18:05:00",
+     "rescueEndDate": "2026-10-14T11:53:08.5613894+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "RMI",
+     "operationStartDate": "2026-10-14T11:15:00",
+     "rescueEndDate": "2026-10-14T11:53:08.5613894+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "SDR",
+     "operationStartDate": "2026-10-15T17:25:00",
+     "rescueEndDate": "2026-10-14T11:53:08.5613894+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "SOF",
+     "operationStartDate": "1900-01-01T00:00:00",
+     "rescueEndDate": "2026-10-14T11:53:08.5613894+01:00",
+     "isDomestic": false,
+     "isNew": true,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "STR",
+     "operationStartDate": "2026-10-14T15:25:00",
+     "rescueEndDate": "2026-10-14T11:53:08.5613894+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "TLL",
+     "operationStartDate": "2027-06-21T05:50:00",
+     "rescueEndDate": "2026-10-14T11:53:08.5613894+01:00",
+     "isDomestic": false,
+     "isNew": true,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "TRF",
+     "operationStartDate": "2026-10-16T17:35:00",
+     "rescueEndDate": "2026-10-14T11:53:08.5613894+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "OOS",
+     "operationStartDate": "2026-10-16T17:35:00",
+     "rescueEndDate": "2026-10-14T11:53:08.5613894+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "TRN",
+     "operationStartDate": "2026-10-14T10:30:00",
+     "rescueEndDate": "2026-10-14T11:53:08.5613894+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "TRS",
+     "operationStartDate": "2026-10-16T07:15:00",
+     "rescueEndDate": "2026-10-14T11:53:08.5613894+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "TSF",
+     "operationStartDate": "2026-10-14T06:45:00",
+     "rescueEndDate": "2026-10-14T11:53:08.5613894+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "VEN",
+     "operationStartDate": "2026-10-14T06:45:00",
+     "rescueEndDate": "2026-10-14T11:53:08.5613894+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "VCE",
+     "operationStartDate": "2026-10-14T06:45:00",
+     "rescueEndDate": "2026-10-14T11:53:08.5613894+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "VLC",
+     "operationStartDate": "2026-10-16T19:00:00",
+     "rescueEndDate": "2026-10-14T11:53:08.5613894+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "VNO",
+     "operationStartDate": "2026-10-15T15:35:00",
+     "rescueEndDate": "2026-10-14T11:53:08.5613894+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "VRN",
+     "operationStartDate": "2026-10-14T15:25:00",
+     "rescueEndDate": "2026-10-14T11:53:08.5613894+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "WAW",
+     "operationStartDate": "2026-10-14T18:05:00",
+     "rescueEndDate": "2026-10-14T11:53:08.5613894+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "WRO",
+     "operationStartDate": "2026-10-16T15:45:00",
+     "rescueEndDate": "2026-10-14T11:53:08.5613894+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    }
+   ],
+   "aliases": [
+    "Tirana"
+   ],
+   "isExcludedFromGeoLocation": false,
+   "rank": 1,
+   "categories": [
+    7,
+    8,
+    9,
+    0
+   ],
+   "isFakeStation": false
+  },
+  {
+   "iata": "KUN",
+   "mac": "LTE",
+   "longitude": 24.084722222222222,
+   "currencyCode": "EUR",
+   "latitude": 54.96388888888889,
+   "shortName": "Kaunas",
+   "countryName": "Lithuania",
+   "countryCode": "LT",
+   "connections": [
+    {
+     "iata": "AGP",
+     "operationStartDate": "2026-10-16T06:00:00",
+     "rescueEndDate": "2026-10-14T11:53:08.7434839+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "BCN",
+     "operationStartDate": "2026-10-15T16:35:00",
+     "rescueEndDate": "2026-10-14T11:53:08.7434839+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "BER",
+     "operationStartDate": "2026-10-26T16:40:00",
+     "rescueEndDate": "2026-10-14T11:53:08.7434839+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "BGO",
+     "operationStartDate": "2026-12-19T13:05:00",
+     "rescueEndDate": "2026-10-14T11:53:08.7434839+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "BLL",
+     "operationStartDate": "2026-10-17T09:55:00",
+     "rescueEndDate": "2026-10-14T11:53:08.7434839+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "BUD",
+     "operationStartDate": "2026-10-14T09:55:00",
+     "rescueEndDate": "2026-10-14T11:53:08.7434839+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "CTA",
+     "operationStartDate": "2026-10-17T05:55:00",
+     "rescueEndDate": "2026-10-14T11:53:08.7434839+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "DTM",
+     "operationStartDate": "2026-10-15T15:20:00",
+     "rescueEndDate": "2026-10-14T11:53:08.7434839+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "EIN",
+     "operationStartDate": "2026-10-16T13:10:00",
+     "rescueEndDate": "2026-10-14T11:53:08.7434839+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "NLM",
+     "operationStartDate": "2026-10-16T13:10:00",
+     "rescueEndDate": "2026-10-14T11:53:08.7434839+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "GDN",
+     "operationStartDate": "2026-10-15T23:25:00",
+     "rescueEndDate": "2026-10-14T11:53:08.7434839+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "GNB",
+     "operationStartDate": "2027-01-02T05:50:00",
+     "rescueEndDate": "2026-10-14T11:53:08.7434839+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "KEF",
+     "operationStartDate": "2026-10-16T15:45:00",
+     "rescueEndDate": "2026-10-14T11:53:08.7434839+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "KRK",
+     "operationStartDate": "2026-10-14T09:25:00",
+     "rescueEndDate": "2026-10-14T11:53:08.7434839+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "KUT",
+     "operationStartDate": "2026-10-15T19:25:00",
+     "rescueEndDate": "2026-10-14T11:53:08.7434839+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "LCA",
+     "operationStartDate": "2026-10-14T16:35:00",
+     "rescueEndDate": "2026-10-14T11:53:08.7434839+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "MXP",
+     "operationStartDate": "2026-10-14T19:35:00",
+     "rescueEndDate": "2026-10-14T11:53:08.7434839+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "MIL",
+     "operationStartDate": "2026-10-14T19:35:00",
+     "rescueEndDate": "2026-10-14T11:53:08.7434839+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "NCE",
+     "operationStartDate": "2026-10-14T15:10:00",
+     "rescueEndDate": "2026-10-14T11:53:08.7434839+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "PRG",
+     "operationStartDate": "2026-10-15T09:55:00",
+     "rescueEndDate": "2026-10-14T11:53:08.7434839+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "TGD",
+     "operationStartDate": "2026-10-15T20:00:00",
+     "rescueEndDate": "2026-10-14T11:53:08.7434839+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "TIA",
+     "operationStartDate": "2026-10-15T13:25:00",
+     "rescueEndDate": "2026-10-14T11:53:08.7434839+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "TKU",
+     "operationStartDate": "1900-01-01T00:00:00",
+     "rescueEndDate": "2026-10-14T11:53:08.7434839+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "TLL",
+     "operationStartDate": "2026-10-15T06:10:00",
+     "rescueEndDate": "2026-10-14T11:53:08.7434839+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "TLV",
+     "operationStartDate": "2026-10-15T06:00:00",
+     "rescueEndDate": "2026-10-14T11:53:08.7434839+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "LTN",
+     "operationStartDate": "2026-10-14T21:15:00",
+     "rescueEndDate": "2026-10-14T11:53:08.7434839+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "LON",
+     "operationStartDate": "2026-10-14T21:15:00",
+     "rescueEndDate": "2026-10-14T11:53:08.7434839+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    }
+   ],
+   "aliases": [
+    "Kaunas"
+   ],
+   "isExcludedFromGeoLocation": false,
+   "rank": 1,
+   "categories": [
+    1,
+    7,
+    8,
+    0
+   ],
+   "isFakeStation": false
+  },
+  {
+   "iata": "VNO",
+   "mac": "LTE",
+   "longitude": 25.285833333333336,
+   "currencyCode": "EUR",
+   "latitude": 54.634166666666665,
+   "shortName": "Vilnius",
+   "countryName": "Lithuania",
+   "countryCode": "LT",
+   "connections": [
+    {
+     "iata": "AGP",
+     "operationStartDate": "2026-10-16T06:00:00",
+     "rescueEndDate": "2026-10-14T11:53:08.7434839+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "BCN",
+     "operationStartDate": "2026-10-15T16:35:00",
+     "rescueEndDate": "2026-10-14T11:53:08.7434839+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "BER",
+     "operationStartDate": "2026-10-26T16:40:00",
+     "rescueEndDate": "2026-10-14T11:53:08.7434839+01:00",
+     "isDomestic": false,
+     "isNew": true,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "BGO",
+     "operationStartDate": "2026-12-19T13:05:00",
+     "rescueEndDate": "2026-10-14T11:53:08.7434839+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "BLL",
+     "operationStartDate": "2026-10-17T09:55:00",
+     "rescueEndDate": "2026-10-14T11:53:08.7434839+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "BUD",
+     "operationStartDate": "2026-10-14T09:55:00",
+     "rescueEndDate": "2026-10-14T11:53:08.7434839+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "CTA",
+     "operationStartDate": "2026-10-17T05:55:00",
+     "rescueEndDate": "2026-10-14T11:53:08.7434839+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "DTM",
+     "operationStartDate": "2026-10-15T15:20:00",
+     "rescueEndDate": "2026-10-14T11:53:08.7434839+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "EIN",
+     "operationStartDate": "2026-10-16T13:10:00",
+     "rescueEndDate": "2026-10-14T11:53:08.7434839+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "NLM",
+     "operationStartDate": "2026-10-16T13:10:00",
+     "rescueEndDate": "2026-10-14T11:53:08.7434839+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "GDN",
+     "operationStartDate": "2026-10-15T23:25:00",
+     "rescueEndDate": "2026-10-14T11:53:08.7434839+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "GNB",
+     "operationStartDate": "2027-01-02T05:50:00",
+     "rescueEndDate": "2026-10-14T11:53:08.7434839+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "KEF",
+     "operationStartDate": "2026-10-16T15:45:00",
+     "rescueEndDate": "2026-10-14T11:53:08.7434839+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "KRK",
+     "operationStartDate": "2026-10-14T09:25:00",
+     "rescueEndDate": "2026-10-14T11:53:08.7434839+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "KUT",
+     "operationStartDate": "2026-10-15T19:25:00",
+     "rescueEndDate": "2026-10-14T11:53:08.7434839+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "LCA",
+     "operationStartDate": "2026-10-14T16:35:00",
+     "rescueEndDate": "2026-10-14T11:53:08.7434839+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "LTN",
+     "operationStartDate": "2026-10-14T21:15:00",
+     "rescueEndDate": "2026-10-14T11:53:08.7434839+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "LON",
+     "operationStartDate": "2026-10-14T21:15:00",
+     "rescueEndDate": "2026-10-14T11:53:08.7434839+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "MXP",
+     "operationStartDate": "2026-10-14T19:35:00",
+     "rescueEndDate": "2026-10-14T11:53:08.7434839+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "MIL",
+     "operationStartDate": "2026-10-14T19:35:00",
+     "rescueEndDate": "2026-10-14T11:53:08.7434839+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "NCE",
+     "operationStartDate": "2026-10-14T15:10:00",
+     "rescueEndDate": "2026-10-14T11:53:08.7434839+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "PRG",
+     "operationStartDate": "2026-10-15T09:55:00",
+     "rescueEndDate": "2026-10-14T11:53:08.7434839+01:00",
+     "isDomestic": false,
+     "isNew": true,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "TGD",
+     "operationStartDate": "2026-10-15T20:00:00",
+     "rescueEndDate": "2026-10-14T11:53:08.7434839+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "TIA",
+     "operationStartDate": "2026-10-15T13:25:00",
+     "rescueEndDate": "2026-10-14T11:53:08.7434839+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "TKU",
+     "operationStartDate": "1900-01-01T00:00:00",
+     "rescueEndDate": "2026-10-14T11:53:08.7434839+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "TLL",
+     "operationStartDate": "2026-10-15T06:10:00",
+     "rescueEndDate": "2026-10-14T11:53:08.7434839+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "TLV",
+     "operationStartDate": "2026-10-15T06:00:00",
+     "rescueEndDate": "2026-10-14T11:53:08.7434839+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    }
+   ],
+   "aliases": [
+    "Vilnius"
+   ],
+   "isExcludedFromGeoLocation": false,
+   "rank": 1,
+   "categories": [
+    1,
+    7,
+    8,
+    9,
+    0
+   ],
+   "isFakeStation": false
+  },
+  {
+   "iata": "LON",
+   "mac": "LON",
+   "longitude": -0.11805555555555555,
+   "currencyCode": "GBP",
+   "latitude": 51.51,
+   "shortName": "London (All Airports)",
+   "countryName": "United Kingdom",
+   "countryCode": "GB",
+   "connections": [
+    {
+     "iata": "AGP",
+     "operationStartDate": "2026-10-15T05:35:00",
+     "rescueEndDate": "2026-10-14T11:53:08.8997511+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "AYT",
+     "operationStartDate": "2026-10-14T15:15:00",
+     "rescueEndDate": "2026-10-14T11:53:08.8997511+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "BUD",
+     "operationStartDate": "2026-10-14T11:05:00",
+     "rescueEndDate": "2026-10-14T11:53:08.8997511+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "DLM",
+     "operationStartDate": "2026-10-15T17:05:00",
+     "rescueEndDate": "2026-10-14T11:53:08.8997511+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "FAO",
+     "operationStartDate": "2026-10-14T07:40:00",
+     "rescueEndDate": "2026-10-14T11:53:08.8997511+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "GNB",
+     "operationStartDate": "2026-12-19T12:30:00",
+     "rescueEndDate": "2026-10-14T11:53:08.8997511+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "HRG",
+     "operationStartDate": "2026-10-23T07:45:00",
+     "rescueEndDate": "2026-10-14T11:53:08.8997511+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "IST",
+     "operationStartDate": "2026-10-14T05:35:00",
+     "rescueEndDate": "2026-10-14T11:53:08.8997511+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "JTR",
+     "operationStartDate": "1900-01-01T00:00:00",
+     "rescueEndDate": "2026-10-14T11:53:08.8997511+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "KRK",
+     "operationStartDate": "2026-10-14T08:25:00",
+     "rescueEndDate": "2026-10-14T11:53:08.8997511+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "LCA",
+     "operationStartDate": "2026-10-14T10:25:00",
+     "rescueEndDate": "2026-10-14T11:53:08.8997511+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "LYS",
+     "operationStartDate": "2026-10-15T13:10:00",
+     "rescueEndDate": "2026-10-14T11:53:08.8997511+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "PRG",
+     "operationStartDate": "2026-10-14T13:35:00",
+     "rescueEndDate": "2026-10-14T11:53:08.8997511+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "RMO",
+     "operationStartDate": "2026-10-14T06:30:00",
+     "rescueEndDate": "2026-10-14T11:53:08.8997511+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "SSH",
+     "operationStartDate": "2026-10-23T15:00:00",
+     "rescueEndDate": "2026-10-14T11:53:08.8997511+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "TGD",
+     "operationStartDate": "2026-10-14T05:40:00",
+     "rescueEndDate": "2026-10-14T11:53:08.8997511+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "TIA",
+     "operationStartDate": "2026-10-14T07:00:00",
+     "rescueEndDate": "2026-10-14T11:53:08.8997511+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "TLV",
+     "operationStartDate": "2026-10-14T07:25:00",
+     "rescueEndDate": "2026-10-14T11:53:08.8997511+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "VLC",
+     "operationStartDate": "2026-10-14T06:00:00",
+     "rescueEndDate": "2026-10-14T11:53:08.8997511+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "ALC",
+     "operationStartDate": "2026-10-14T16:30:00",
+     "rescueEndDate": "2026-10-14T11:53:08.8997511+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "ARW",
+     "operationStartDate": "2026-10-14T08:10:00",
+     "rescueEndDate": "2026-10-14T11:53:08.8997511+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "ATH",
+     "operationStartDate": "2026-10-15T06:20:00",
+     "rescueEndDate": "2026-10-14T11:53:08.8997511+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "BBU",
+     "operationStartDate": "2026-10-14T09:00:00",
+     "rescueEndDate": "2026-10-14T11:53:08.8997511+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "BCM",
+     "operationStartDate": "2026-10-14T15:20:00",
+     "rescueEndDate": "2026-10-14T11:53:08.8997511+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "BCN",
+     "operationStartDate": "2026-10-14T12:45:00",
+     "rescueEndDate": "2026-10-14T11:53:08.8997511+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "BEG",
+     "operationStartDate": "2026-10-14T06:15:00",
+     "rescueEndDate": "2026-10-14T11:53:08.8997511+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "BIO",
+     "operationStartDate": "2026-10-15T18:00:00",
+     "rescueEndDate": "2026-10-14T11:53:08.8997511+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "BOD",
+     "operationStartDate": "2026-10-16T13:20:00",
+     "rescueEndDate": "2026-10-14T11:53:08.8997511+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "BOJ",
+     "operationStartDate": "2026-10-15T14:50:00",
+     "rescueEndDate": "2026-10-14T11:53:08.8997511+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "BTS",
+     "operationStartDate": "2026-10-14T12:20:00",
+     "rescueEndDate": "2026-10-14T11:53:08.8997511+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "CFU",
+     "operationStartDate": "2027-06-02T14:40:00",
+     "rescueEndDate": "2026-10-14T11:53:08.8997511+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "CHQ",
+     "operationStartDate": "2026-10-16T15:40:00",
+     "rescueEndDate": "2026-10-14T11:53:08.8997511+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "CLJ",
+     "operationStartDate": "2026-10-14T08:15:00",
+     "rescueEndDate": "2026-10-14T11:53:08.8997511+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "CND",
+     "operationStartDate": "2026-10-14T07:45:00",
+     "rescueEndDate": "2026-10-14T11:53:08.8997511+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "CRA",
+     "operationStartDate": "2026-10-14T08:15:00",
+     "rescueEndDate": "2026-10-14T11:53:08.8997511+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "DEB",
+     "operationStartDate": "2026-10-14T06:10:00",
+     "rescueEndDate": "2026-10-14T11:53:08.8997511+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "DTM",
+     "operationStartDate": "2026-10-14T13:00:00",
+     "rescueEndDate": "2026-10-14T11:53:08.8997511+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "EVN",
+     "operationStartDate": "2026-10-16T14:20:00",
+     "rescueEndDate": "2026-10-14T11:53:08.8997511+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "FCO",
+     "operationStartDate": "2026-10-14T09:15:00",
+     "rescueEndDate": "2026-10-14T11:53:08.8997511+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "ROM",
+     "operationStartDate": "2026-10-14T09:15:00",
+     "rescueEndDate": "2026-10-14T11:53:08.8997511+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "GDN",
+     "operationStartDate": "2026-10-14T08:30:00",
+     "rescueEndDate": "2026-10-14T11:53:08.8997511+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "GHV",
+     "operationStartDate": "2026-10-14T05:00:00",
+     "rescueEndDate": "2026-10-14T11:53:08.8997511+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "GRX",
+     "operationStartDate": "2026-10-21T06:05:00",
+     "rescueEndDate": "2026-10-14T11:53:08.8997511+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "IAS",
+     "operationStartDate": "2026-10-14T08:15:00",
+     "rescueEndDate": "2026-10-14T11:53:08.8997511+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "JMK",
+     "operationStartDate": "2027-05-30T15:05:00",
+     "rescueEndDate": "2026-10-14T11:53:08.8997511+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "KSC",
+     "operationStartDate": "2026-10-14T12:45:00",
+     "rescueEndDate": "2026-10-14T11:53:08.8997511+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "KTW",
+     "operationStartDate": "2026-10-14T08:30:00",
+     "rescueEndDate": "2026-10-14T11:53:08.8997511+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "KUN",
+     "operationStartDate": "2026-10-14T08:05:00",
+     "rescueEndDate": "2026-10-14T11:53:08.8997511+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "LUZ",
+     "operationStartDate": "2026-10-14T05:55:00",
+     "rescueEndDate": "2026-10-14T11:53:08.9153702+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "MAD",
+     "operationStartDate": "2026-10-14T08:00:00",
+     "rescueEndDate": "2026-10-14T11:53:08.9153702+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "MXP",
+     "operationStartDate": "2026-10-14T15:15:00",
+     "rescueEndDate": "2026-10-14T11:53:08.9153702+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "MIL",
+     "operationStartDate": "2026-10-14T15:15:00",
+     "rescueEndDate": "2026-10-14T11:53:08.9153702+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "OTP",
+     "operationStartDate": "2026-10-14T09:00:00",
+     "rescueEndDate": "2026-10-14T11:53:08.9153702+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "OVD",
+     "operationStartDate": "2026-10-22T08:00:00",
+     "rescueEndDate": "2026-10-14T11:53:08.9153702+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "PDV",
+     "operationStartDate": "2026-10-15T06:15:00",
+     "rescueEndDate": "2026-10-14T11:53:08.9153702+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "PMI",
+     "operationStartDate": "2026-10-14T11:50:00",
+     "rescueEndDate": "2026-10-14T11:53:08.9153702+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "POZ",
+     "operationStartDate": "2026-10-14T08:00:00",
+     "rescueEndDate": "2026-10-14T11:53:08.9153702+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "PRN",
+     "operationStartDate": "2026-10-15T19:05:00",
+     "rescueEndDate": "2026-10-14T11:53:08.9153702+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "RHO",
+     "operationStartDate": "2026-10-14T14:50:00",
+     "rescueEndDate": "2026-10-14T11:53:08.9153702+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "SBZ",
+     "operationStartDate": "2026-10-14T20:20:00",
+     "rescueEndDate": "2026-10-14T11:53:08.9153702+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "SCV",
+     "operationStartDate": "2026-10-14T07:45:00",
+     "rescueEndDate": "2026-10-14T11:53:08.9153702+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "SJJ",
+     "operationStartDate": "2026-10-17T07:05:00",
+     "rescueEndDate": "2026-10-14T11:53:08.9153702+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "SKP",
+     "operationStartDate": "2026-10-14T18:40:00",
+     "rescueEndDate": "2026-10-14T11:53:08.9153702+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "SOF",
+     "operationStartDate": "2026-10-14T08:20:00",
+     "rescueEndDate": "2026-10-14T11:53:08.9153702+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "SPU",
+     "operationStartDate": "2026-10-15T17:05:00",
+     "rescueEndDate": "2026-10-14T11:53:08.9153702+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "SPX",
+     "operationStartDate": "2026-10-14T15:00:00",
+     "rescueEndDate": "2026-10-14T11:53:08.9153702+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "SUJ",
+     "operationStartDate": "2026-10-15T17:30:00",
+     "rescueEndDate": "2026-10-14T11:53:08.9153702+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "SVQ",
+     "operationStartDate": "2026-10-15T06:05:00",
+     "rescueEndDate": "2026-10-14T11:53:08.9153702+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "TAT",
+     "operationStartDate": "2026-10-15T14:25:00",
+     "rescueEndDate": "2026-10-14T11:53:08.9153702+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "TGM",
+     "operationStartDate": "2026-10-15T08:10:00",
+     "rescueEndDate": "2026-10-14T11:53:08.9153702+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "TLL",
+     "operationStartDate": "2026-10-14T06:05:00",
+     "rescueEndDate": "2026-10-14T11:53:08.9153702+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "TOS",
+     "operationStartDate": "2026-10-22T14:50:00",
+     "rescueEndDate": "2026-10-14T11:53:08.9153702+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "TRN",
+     "operationStartDate": "2026-10-17T12:55:00",
+     "rescueEndDate": "2026-10-14T11:53:08.9153702+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "TSR",
+     "operationStartDate": "2026-10-14T08:10:00",
+     "rescueEndDate": "2026-10-14T11:53:08.9153702+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "VAR",
+     "operationStartDate": "2026-10-14T08:25:00",
+     "rescueEndDate": "2026-10-14T11:53:08.9153702+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "VCE",
+     "operationStartDate": "2026-10-15T20:50:00",
+     "rescueEndDate": "2026-10-14T11:53:08.9153702+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "VEN",
+     "operationStartDate": "2026-10-15T20:50:00",
+     "rescueEndDate": "2026-10-14T11:53:08.9153702+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "VNO",
+     "operationStartDate": "2026-10-14T08:05:00",
+     "rescueEndDate": "2026-10-14T11:53:08.9153702+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "WAW",
+     "operationStartDate": "2026-10-14T08:25:00",
+     "rescueEndDate": "2026-10-14T11:53:08.9153702+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "WSW",
+     "operationStartDate": "2026-10-14T08:25:00",
+     "rescueEndDate": "2026-10-14T11:53:08.9153702+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "WRO",
+     "operationStartDate": "2026-10-14T20:25:00",
+     "rescueEndDate": "2026-10-14T11:53:08.9153702+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "ZTH",
+     "operationStartDate": "2027-06-02T14:40:00",
+     "rescueEndDate": "2026-10-14T11:53:08.9153702+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    }
+   ],
+   "aliases": [
+    "London (All Airports)"
+   ],
+   "isExcludedFromGeoLocation": false,
+   "rank": 1,
+   "categories": [],
+   "isFakeStation": true
+  },
+  {
+   "iata": "LTN",
+   "mac": "LON",
+   "longitude": -0.3683333333333333,
+   "currencyCode": "GBP",
+   "latitude": 51.874722222222225,
+   "shortName": "London Luton",
+   "countryName": "United Kingdom",
+   "countryCode": "GB",
+   "connections": [
+    {
+     "iata": "AGP",
+     "operationStartDate": "2026-10-15T05:35:00",
+     "rescueEndDate": "2026-10-14T11:53:08.9153702+01:00",
+     "isDomestic": false,
+     "isNew": true,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "ALC",
+     "operationStartDate": "2026-10-14T16:30:00",
+     "rescueEndDate": "2026-10-14T11:53:08.9153702+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "ARW",
+     "operationStartDate": "2026-10-14T08:10:00",
+     "rescueEndDate": "2026-10-14T11:53:08.9153702+01:00",
+     "isDomestic": false,
+     "isNew": true,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "ATH",
+     "operationStartDate": "2026-10-15T06:20:00",
+     "rescueEndDate": "2026-10-14T11:53:08.9153702+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "AYT",
+     "operationStartDate": "2026-10-14T15:15:00",
+     "rescueEndDate": "2026-10-14T11:53:08.9153702+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "BBU",
+     "operationStartDate": "2026-10-14T09:00:00",
+     "rescueEndDate": "2026-10-14T11:53:08.9153702+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "BCM",
+     "operationStartDate": "2026-10-14T15:20:00",
+     "rescueEndDate": "2026-10-14T11:53:08.9153702+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "BCN",
+     "operationStartDate": "2026-10-14T12:45:00",
+     "rescueEndDate": "2026-10-14T11:53:08.9153702+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "BEG",
+     "operationStartDate": "2026-10-14T06:15:00",
+     "rescueEndDate": "2026-10-14T11:53:08.9153702+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "BIO",
+     "operationStartDate": "2026-10-15T18:00:00",
+     "rescueEndDate": "2026-10-14T11:53:08.9153702+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "BOD",
+     "operationStartDate": "2026-10-16T13:20:00",
+     "rescueEndDate": "2026-10-14T11:53:08.9153702+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "BOJ",
+     "operationStartDate": "2026-10-15T14:50:00",
+     "rescueEndDate": "2026-10-14T11:53:08.9153702+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "BTS",
+     "operationStartDate": "2026-10-14T12:20:00",
+     "rescueEndDate": "2026-10-14T11:53:08.9153702+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "BUD",
+     "operationStartDate": "2026-10-14T11:05:00",
+     "rescueEndDate": "2026-10-14T11:53:08.9153702+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "CFU",
+     "operationStartDate": "2027-06-02T14:40:00",
+     "rescueEndDate": "2026-10-14T11:53:08.9153702+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "CHQ",
+     "operationStartDate": "2026-10-16T15:40:00",
+     "rescueEndDate": "2026-10-14T11:53:08.9153702+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "CLJ",
+     "operationStartDate": "2026-10-14T08:15:00",
+     "rescueEndDate": "2026-10-14T11:53:08.9153702+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "CND",
+     "operationStartDate": "2026-10-14T07:45:00",
+     "rescueEndDate": "2026-10-14T11:53:08.9153702+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "CRA",
+     "operationStartDate": "2026-10-14T08:15:00",
+     "rescueEndDate": "2026-10-14T11:53:08.9153702+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "DEB",
+     "operationStartDate": "2026-10-14T06:10:00",
+     "rescueEndDate": "2026-10-14T11:53:08.9153702+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "DTM",
+     "operationStartDate": "2026-10-14T13:00:00",
+     "rescueEndDate": "2026-10-14T11:53:08.9153702+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "EVN",
+     "operationStartDate": "2026-10-16T14:20:00",
+     "rescueEndDate": "2026-10-14T11:53:08.9153702+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "FAO",
+     "operationStartDate": "2026-10-14T07:40:00",
+     "rescueEndDate": "2026-10-14T11:53:08.9153702+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "FCO",
+     "operationStartDate": "2026-10-14T09:15:00",
+     "rescueEndDate": "2026-10-14T11:53:08.9153702+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "ROM",
+     "operationStartDate": "2026-10-14T09:15:00",
+     "rescueEndDate": "2026-10-14T11:53:08.9153702+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "GDN",
+     "operationStartDate": "2026-10-14T08:30:00",
+     "rescueEndDate": "2026-10-14T11:53:08.9153702+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "GHV",
+     "operationStartDate": "2026-10-14T05:00:00",
+     "rescueEndDate": "2026-10-14T11:53:08.9153702+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "GNB",
+     "operationStartDate": "2026-12-19T12:30:00",
+     "rescueEndDate": "2026-10-14T11:53:08.9153702+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "GRX",
+     "operationStartDate": "2026-10-21T06:05:00",
+     "rescueEndDate": "2026-10-14T11:53:08.9153702+01:00",
+     "isDomestic": false,
+     "isNew": true,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "HRG",
+     "operationStartDate": "2026-10-23T07:45:00",
+     "rescueEndDate": "2026-10-14T11:53:08.9153702+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "IAS",
+     "operationStartDate": "2026-10-14T08:15:00",
+     "rescueEndDate": "2026-10-14T11:53:08.9153702+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "IST",
+     "operationStartDate": "2026-10-14T05:35:00",
+     "rescueEndDate": "2026-10-14T11:53:08.9153702+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "JMK",
+     "operationStartDate": "2027-05-30T15:05:00",
+     "rescueEndDate": "2026-10-14T11:53:08.9153702+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "KRK",
+     "operationStartDate": "2026-10-14T08:25:00",
+     "rescueEndDate": "2026-10-14T11:53:08.9153702+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "KSC",
+     "operationStartDate": "2026-10-14T12:45:00",
+     "rescueEndDate": "2026-10-14T11:53:08.9153702+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "KTW",
+     "operationStartDate": "2026-10-14T08:30:00",
+     "rescueEndDate": "2026-10-14T11:53:08.9153702+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "KUN",
+     "operationStartDate": "2026-10-14T08:05:00",
+     "rescueEndDate": "2026-10-14T11:53:08.9153702+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "LCA",
+     "operationStartDate": "2026-10-14T10:25:00",
+     "rescueEndDate": "2026-10-14T11:53:08.9153702+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "LUZ",
+     "operationStartDate": "2026-10-14T05:55:00",
+     "rescueEndDate": "2026-10-14T11:53:08.9153702+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "LYS",
+     "operationStartDate": "2026-10-15T13:10:00",
+     "rescueEndDate": "2026-10-14T11:53:08.9153702+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "MAD",
+     "operationStartDate": "2026-10-14T08:00:00",
+     "rescueEndDate": "2026-10-14T11:53:08.9153702+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "MXP",
+     "operationStartDate": "2026-10-14T15:15:00",
+     "rescueEndDate": "2026-10-14T11:53:08.9153702+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "MIL",
+     "operationStartDate": "2026-10-14T15:15:00",
+     "rescueEndDate": "2026-10-14T11:53:08.9153702+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "OTP",
+     "operationStartDate": "2026-10-14T09:00:00",
+     "rescueEndDate": "2026-10-14T11:53:08.9153702+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "OVD",
+     "operationStartDate": "2026-10-22T08:00:00",
+     "rescueEndDate": "2026-10-14T11:53:08.9153702+01:00",
+     "isDomestic": false,
+     "isNew": true,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "PDV",
+     "operationStartDate": "2026-10-15T06:15:00",
+     "rescueEndDate": "2026-10-14T11:53:08.9153702+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "PMI",
+     "operationStartDate": "2026-10-14T11:50:00",
+     "rescueEndDate": "2026-10-14T11:53:08.9153702+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "POZ",
+     "operationStartDate": "2026-10-14T08:00:00",
+     "rescueEndDate": "2026-10-14T11:53:08.9153702+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "PRG",
+     "operationStartDate": "2026-10-14T13:35:00",
+     "rescueEndDate": "2026-10-14T11:53:08.9153702+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "PRN",
+     "operationStartDate": "2026-10-15T19:05:00",
+     "rescueEndDate": "2026-10-14T11:53:08.9153702+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "RHO",
+     "operationStartDate": "2026-10-14T14:50:00",
+     "rescueEndDate": "2026-10-14T11:53:08.9153702+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "RMO",
+     "operationStartDate": "2026-10-14T06:30:00",
+     "rescueEndDate": "2026-10-14T11:53:08.9153702+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "SBZ",
+     "operationStartDate": "2026-10-14T20:20:00",
+     "rescueEndDate": "2026-10-14T11:53:08.9153702+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "SCV",
+     "operationStartDate": "2026-10-14T07:45:00",
+     "rescueEndDate": "2026-10-14T11:53:08.9153702+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "SJJ",
+     "operationStartDate": "2026-10-17T07:05:00",
+     "rescueEndDate": "2026-10-14T11:53:08.9153702+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "SKP",
+     "operationStartDate": "2026-10-14T18:40:00",
+     "rescueEndDate": "2026-10-14T11:53:08.9153702+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "SOF",
+     "operationStartDate": "2026-10-14T08:20:00",
+     "rescueEndDate": "2026-10-14T11:53:08.9153702+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "SPU",
+     "operationStartDate": "2026-10-15T17:05:00",
+     "rescueEndDate": "2026-10-14T11:53:08.9153702+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "SPX",
+     "operationStartDate": "2026-10-14T15:00:00",
+     "rescueEndDate": "2026-10-14T11:53:08.9153702+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "SSH",
+     "operationStartDate": "2026-10-23T15:00:00",
+     "rescueEndDate": "2026-10-14T11:53:08.9153702+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "SUJ",
+     "operationStartDate": "2026-10-15T17:30:00",
+     "rescueEndDate": "2026-10-14T11:53:08.9153702+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "SVQ",
+     "operationStartDate": "2026-10-15T06:05:00",
+     "rescueEndDate": "2026-10-14T11:53:08.9153702+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "TAT",
+     "operationStartDate": "2026-10-15T14:25:00",
+     "rescueEndDate": "2026-10-14T11:53:08.9153702+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "TGM",
+     "operationStartDate": "2026-10-15T08:10:00",
+     "rescueEndDate": "2026-10-14T11:53:08.9153702+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "TIA",
+     "operationStartDate": "2026-10-14T07:00:00",
+     "rescueEndDate": "2026-10-14T11:53:08.9153702+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "TLL",
+     "operationStartDate": "2026-10-14T06:05:00",
+     "rescueEndDate": "2026-10-14T11:53:08.9153702+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "TLV",
+     "operationStartDate": "2026-10-14T07:25:00",
+     "rescueEndDate": "2026-10-14T11:53:08.9153702+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "TOS",
+     "operationStartDate": "2026-10-22T14:50:00",
+     "rescueEndDate": "2026-10-14T11:53:08.9153702+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "TRN",
+     "operationStartDate": "2026-10-17T12:55:00",
+     "rescueEndDate": "2026-10-14T11:53:08.9153702+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "TSR",
+     "operationStartDate": "2026-10-14T08:10:00",
+     "rescueEndDate": "2026-10-14T11:53:08.9153702+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "VAR",
+     "operationStartDate": "2026-10-14T08:25:00",
+     "rescueEndDate": "2026-10-14T11:53:08.9153702+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "VCE",
+     "operationStartDate": "2026-10-15T20:50:00",
+     "rescueEndDate": "2026-10-14T11:53:08.9153702+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "VEN",
+     "operationStartDate": "2026-10-15T20:50:00",
+     "rescueEndDate": "2026-10-14T11:53:08.9153702+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "VLC",
+     "operationStartDate": "2026-10-14T06:00:00",
+     "rescueEndDate": "2026-10-14T11:53:08.9153702+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "VNO",
+     "operationStartDate": "2026-10-14T08:05:00",
+     "rescueEndDate": "2026-10-14T11:53:08.9153702+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "WAW",
+     "operationStartDate": "2026-10-14T08:25:00",
+     "rescueEndDate": "2026-10-14T11:53:08.9153702+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "WSW",
+     "operationStartDate": "2026-10-14T08:25:00",
+     "rescueEndDate": "2026-10-14T11:53:08.9153702+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "WRO",
+     "operationStartDate": "2026-10-14T20:25:00",
+     "rescueEndDate": "2026-10-14T11:53:08.9153702+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    },
+    {
+     "iata": "ZTH",
+     "operationStartDate": "2027-06-02T14:40:00",
+     "rescueEndDate": "2026-10-14T11:53:08.9153702+01:00",
+     "isDomestic": false,
+     "isNew": false,
+     "isConnected": false,
+     "isDirectFlight": true
+    }
+   ],
+   "aliases": [
+    "London Luton"
+   ],
+   "isExcludedFromGeoLocation": false,
+   "rank": 1,
+   "categories": [
+    1,
+    2,
+    5,
+    8,
+    0
+   ],
+   "isFakeStation": false
+  }
+ ]
+}

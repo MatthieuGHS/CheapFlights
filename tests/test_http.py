@@ -35,6 +35,8 @@ def manifest(source: str = "ryanair", domains: tuple[str, ...] = ("ryanair.com",
             "home_url": f"https://www.{domains[0]}/",
             "preferred_rung": 1,
             "block_markers": ["Availability declined"],
+            "headed": False,
+            "cookie_headers": {},
             "rate_limit": {"min_interval_s": 2.0, "jitter_s": 0.5},
             "status": "active",
         }
@@ -257,6 +259,16 @@ async def test_source_marker_in_json_error_climbs(
 ) -> None:
     http, _ = make(conn, clock, lambda req: (409, JSON, '{"message":"Availability declined"}'), ok)
     assert (await http.get("https://www.ryanair.com/x", freshness="none")).rung == 2
+
+
+async def test_antibot_challenge_served_as_429_is_blocked_not_rate_limited(
+    conn: sqlite3.Connection, clock: FakeClock
+) -> None:
+    challenge = (429, (("content-type", "text/html"),), "<script>window.KPSDK={}</script>")
+    m = manifest().model_copy(update={"block_markers": ["KPSDK"]})
+    http, ts = make(conn, clock, lambda req: challenge, ok, m=m)
+    assert (await http.get("https://www.ryanair.com/x", freshness="none")).rung == 2
+    assert len(ts[0].sent) == 1  # pas d'attente ni de nouvel essai sur le même rung
 
 
 async def test_json_mentioning_captcha_is_ok(conn: sqlite3.Connection, clock: FakeClock) -> None:

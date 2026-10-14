@@ -11,6 +11,8 @@ block_markers: [Availability declined]   # 409 renvoyé aux appels API jugés au
 rate_limit:
   min_interval_s: 1.5   # à ajuster
   jitter_s: 1.0         # à ajuster
+headed: false
+cookie_headers: {}
 status: active
 # Endpoints découverts par recon le 2026-10-14 (data/recon/ryanair-*) :
 # - routes : /api/views/locate/searchWidget/routes/en/airport/{iata}

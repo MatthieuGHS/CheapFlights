@@ -1,3 +1,4 @@
+import json
 import threading
 from collections.abc import Iterator
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -17,6 +18,12 @@ CFG = load_config(Path(__file__).parent.parent / "config.yaml", Path("/nonexiste
 
 class Handler(BaseHTTPRequestHandler):
     def do_GET(self) -> None:
+        if self.path == "/headers":
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            self.wfile.write(json.dumps(dict(self.headers)).encode().lower())
+            return
         if self.path == "/redirect":
             self.send_response(302)
             self.send_header("Location", "/elsewhere")
@@ -76,15 +83,22 @@ async def test_browser_rung_fetches_from_the_page(base: str, tmp_path: Path) -> 
     ryanair = Path(__file__).parent.parent / "cheaphops/recipes/ryanair/v1/manifest.yaml"
     manifest = Manifest.model_validate(yaml.safe_load(ryanair.read_text()))
     # model_copy ne revalide pas : le manifeste exige https, le serveur de test est en http local
-    local = manifest.model_copy(update={"source": "local", "home_url": f"{base}/home"})
+    local = manifest.model_copy(
+        update={"source": "local", "home_url": f"{base}/home", "cookie_headers": {"x-csrf": "tok"}}
+    )
     t = BrowserTransport(CFG.model_copy(update={"browser_dir": tmp_path}), local)
     try:
         got = await t.send(HttpRequest.build("GET", f"{base}/x", params={"d": "BGY"}))
         posted = await t.send(HttpRequest.build("POST", f"{base}/p", json_body={"a": 1}))
+        page = t._page
+        assert page is not None
+        await page.context.add_cookies([{"name": "tok", "value": "abc", "url": base}])
+        echoed = await t.send(HttpRequest.build("GET", f"{base}/headers"))
     finally:
         await t.aclose()
     assert (got.status, got.rung, got.json()) == (200, 4, {"path": "/x?d=BGY"})
     assert posted.json() == {"a": 1}
+    assert echoed.json()["x-csrf"] == "abc"  # recopié du cookie, comme le jeton CSRF de Wizz
 
 
 async def test_browser_rung_retries_page_load_without_relaunching(
