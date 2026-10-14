@@ -9,8 +9,9 @@ const clock = (iso: string) => iso.slice(11, 16)
 
 export function Results({ status }: { status: Status }) {
   const [open, setOpen] = useState<number | null>(null)
-  if (status.error) return <p className="text-red-600">La recherche a échoué : {status.error}</p>
-  if (status.trips.length === 0) return <p className="text-stone-500">Aucun voyage ne respecte les contraintes.</p>
+  if (status.error || !status.result) return <p className="text-red-600">La recherche a échoué : {status.error}</p>
+  const { trips } = status.result
+  if (trips.length === 0) return <p className="text-stone-500">Aucun voyage ne respecte les contraintes.</p>
   return (
     <section className="overflow-x-auto rounded-lg border border-stone-200 bg-white shadow-sm dark:border-stone-800 dark:bg-stone-900">
       <table className="w-full text-left text-sm">
@@ -27,7 +28,7 @@ export function Results({ status }: { status: Status }) {
           </tr>
         </thead>
         <tbody>
-          {status.trips.map((t, i) => (
+          {trips.map((t, i) => (
             <TripRows key={i} rank={i + 1} trip={t} open={open === i} onToggle={() => setOpen(open === i ? null : i)} />
           ))}
         </tbody>

@@ -39,11 +39,14 @@ def a_trip() -> Trip:
 
 
 async def fake_search(
-    params: Any, config: Any, ground: Any, conn: Any, today: date, emit: Any
+    params: Any, config: Any, ground: Any, conn: Any, today: date, emit: Any, throttle: Any
 ) -> SearchResult:
-    for i in range(3):
-        emit({"type": "progress", "phase": "explore", "done": i + 1, "of": 3})
+    assert throttle is not None  # un seul rate limiter par process, partagé entre recherches
+    for i in range(3):  # forme réelle des événements du moteur (engine.py)
+        emit({"type": "progress", "phase": "explore", "level": 1, "of": 3, "done": i + 1,
+              "source": "ryanair", "requests": i, "cache_hits": 0, "rung": 3})  # fmt: skip
         await asyncio.sleep(0)
+    emit({"type": "candidates", "count": 12})
     return SearchResult([a_trip()], requests=7, budget_exhausted=False, candidates=4, pruned=9)
 
 
@@ -59,14 +62,14 @@ async def test_search_streams_progress_in_order_then_results(config_path: Path) 
         ).json()
         stream = (await c.get(f"/api/searches/{run['id']}/events")).text
         events = [json.loads(line[6:]) for line in stream.splitlines() if line.startswith("data: ")]
-        assert [e["type"] for e in events] == ["progress", "progress", "progress", "finished"]
+        assert [e["type"] for e in events] == ["progress"] * 3 + ["candidates", "finished"]
         assert [e.get("done") for e in events[:3]] == [1, 2, 3]
         body = (await c.get(f"/api/searches/{run['id']}")).json()
     assert body["done"] and body["error"] is None and body["params"]["top_k"] == 5
     assert body["params"]["depart_weekdays"] == [4, 5]  # preset week-end
-    trip = body["trips"][0]
+    trip = body["result"]["trips"][0]
     assert trip["outbound"][0]["flight_no"] is None and trip["inbound"][0]["departure"] is None
-    assert trip["score"] == 44.99 and body["requests"] == 7
+    assert trip["score"] == 44.99 and body["result"]["requests"] == 7
 
 
 async def test_invalid_override_rejected(config_path: Path) -> None:
@@ -84,7 +87,8 @@ async def test_saved_defaults_go_to_local_file_only(config_path: Path) -> None:
         r = await c.put("/api/config/defaults", json={"max_nights": 5, "origins": ["VNO"]})
         assert r.status_code == 200 and r.json()["defaults"]["max_nights"] == 5
         assert (await c.put("/api/config/defaults", json={"max_nights": -3})).status_code == 422
-        assert (await c.get("/api/config")).json()["defaults"]["max_nights"] == 5  # restauré
+        assert (await c.get("/api/config")).json()["defaults"]["max_nights"] == 5  # intact
+        assert not list(config_path.parent.glob("*.tmp"))
     assert config_path.read_text() == before and "max_nights: 5" in local.read_text()
 
 
@@ -94,3 +98,8 @@ async def test_sources_health(config_path: Path) -> None:
     assert {s["source"] for s in sources} == {"ryanair", "wizzair"}
     wizz = next(s for s in sources if s["source"] == "wizzair")
     assert wizz["preferred_rung"] == 4 and "day_flights" not in wizz["capabilities"]
+
+
+async def test_config_exposes_origins_from_ground_edges(config_path: Path) -> None:
+    async with client(config_path) as c:
+        assert (await c.get("/api/config")).json()["origins"] == ["KUN", "RIX", "VNO"]

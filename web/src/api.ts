@@ -29,6 +29,7 @@ export type Defaults = z.infer<typeof Defaults>
 
 const Config = z.object({
   defaults: Defaults,
+  origins: z.array(z.string()),
   presets: z.record(z.string(), Defaults),
   request_budget: z.number(),
 })
@@ -62,19 +63,24 @@ const Trip = z.object({
 })
 export type Trip = z.infer<typeof Trip>
 
+const Result = z.object({
+  trips: z.array(Trip),
+  requests: z.number(),
+  budget_exhausted: z.boolean(),
+  candidates: z.number(),
+  pruned: z.number(),
+})
+
 const Status = z.object({
   id: z.string(),
   done: z.boolean(),
   error: z.string().nullable(),
-  trips: z.array(Trip),
-  requests: z.number().nullable(),
-  budget_exhausted: z.boolean().nullable(),
-  candidates: z.number().nullable(),
-  pruned: z.number().nullable(),
+  result: Result.nullable(),
 })
 export type Status = z.infer<typeof Status>
 
-// Événements du moteur (cheaphops/search/engine.py) ; un type inconnu est gardé tel quel.
+// Événements du moteur (cheaphops/search/engine.py). Un événement qui ne valide pas est signalé
+// en console, jamais affiché : il trahit une dérive du contrat entre moteur et interface.
 export const SearchEvent = z.discriminatedUnion('type', [
   z.object({ type: z.literal('explore'), level: z.number(), source: z.string(), routes: z.number() }),
   z.object({
@@ -96,7 +102,7 @@ export const SearchEvent = z.discriminatedUnion('type', [
     error: z.string(),
     blocked: z.boolean().optional(),
   }),
-  z.object({ type: z.literal('candidates'), count: z.number(), pruned: z.number() }),
+  z.object({ type: z.literal('candidates'), count: z.number() }),
   z.object({
     type: z.literal('done'),
     trips: z.number(),
@@ -143,14 +149,22 @@ export const startSearch = (request: { preset: string | null; overrides: Record<
 export const getSearch = (id: string) => call(Status, `/api/searches/${id}`)
 export const getSources = () => call(z.array(Source), '/api/sources')
 
-/** Abonnement SSE ; renvoie la fonction de désabonnement. */
+/** Abonnement SSE ; renvoie la fonction de désabonnement. Une coupure (serveur redémarré,
+ * recherche inconnue) devient un événement `finished` en erreur : l'UI ne reste jamais bloquée. */
 export function followSearch(id: string, onEvent: (e: SearchEvent) => void): () => void {
   const source = new EventSource(`/api/searches/${id}/events`)
   source.onmessage = (msg: MessageEvent<string>) => {
     const parsed = SearchEvent.safeParse(JSON.parse(msg.data))
-    if (!parsed.success) return // événement d'une version plus récente du moteur : ignoré
+    if (!parsed.success) {
+      console.error('événement hors contrat', msg.data, parsed.error)
+      return
+    }
     onEvent(parsed.data)
     if (parsed.data.type === 'finished') source.close()
+  }
+  source.onerror = () => {
+    source.close()
+    onEvent({ type: 'finished', error: 'connexion au serveur perdue' })
   }
   return () => source.close()
 }

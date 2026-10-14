@@ -221,6 +221,8 @@ async def _verify(
     borne du suivant dépasse le K-ième score vérifié ; aucun candidat restant ne peut entrer."""
     by_name = {s.name: s for s in sources}
     flights: dict[tuple[str, str, str, date], list[Segment]] = {}
+    # shortcut: l'âge des prix vaut l'heure du Verify, même servi par le cache (écart <= 15 min,
+    # la fraîcheur « verify ») ; exposer http_cache.fetched_at si l'UI doit être exacte
     now = datetime.now(UTC)
 
     async def segments(q: Quote) -> list[Segment]:

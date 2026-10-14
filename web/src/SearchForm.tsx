@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react'
 import { getConfig, saveDefaults, startSearch, type Config, type Defaults } from './api'
 
 const WEEKDAYS = ['lun', 'mar', 'mer', 'jeu', 'ven', 'sam', 'dim']
-const ORIGINS = ['VNO', 'KUN', 'RIX']
 
 /** Date locale (pas UTC : à Vilnius, toISOString() donne la veille entre minuit et 3 h). */
 function isoDay(offsetDays: number): string {
@@ -60,9 +59,14 @@ export function SearchForm({ running, onStarted }: Props) {
     }
   }
 
+  // Seuls les écarts aux défauts sont écrits : config.yaml reste la référence pour le reste.
   const keep = async () => {
+    const base = new Map(Object.entries(config.defaults))
+    const changed = Object.fromEntries(
+      Object.entries(form).filter(([key, value]) => JSON.stringify(value) !== JSON.stringify(base.get(key))),
+    )
     try {
-      setConfig(await saveDefaults(form))
+      setConfig(await saveDefaults(changed))
       setSaved(true)
     } catch (e) {
       setError(String(e))
@@ -78,7 +82,7 @@ export function SearchForm({ running, onStarted }: Props) {
             onClick={() => choosePreset(name)}
             className={`rounded-full border px-3 py-1 text-sm ${preset === name ? 'border-sky-600 bg-sky-600 text-white' : 'border-stone-300 dark:border-stone-700'}`}
           >
-            {name === null ? "N'importe quand" : name === 'weekend' ? 'Week-end' : name}
+            {name ?? "N'importe quand"}
           </button>
         ))}
       </div>
@@ -86,7 +90,7 @@ export function SearchForm({ running, onStarted }: Props) {
       <div className="grid grid-cols-2 gap-4 text-sm md:grid-cols-4">
         <Field label="Origines">
           <div className="flex gap-2">
-            {ORIGINS.map((o) => (
+            {config.origins.map((o) => (
               <label key={o} className="flex items-center gap-1">
                 <input
                   type="checkbox"
@@ -176,7 +180,12 @@ export function SearchForm({ running, onStarted }: Props) {
         >
           {running ? 'Recherche en cours…' : 'Lancer'}
         </button>
-        <button onClick={() => void keep()} className="text-sm text-stone-600 underline dark:text-stone-400">
+        <button
+          onClick={() => void keep()}
+          disabled={preset !== null}
+          title={preset !== null ? 'Un preset est actif : ses valeurs ne remplacent pas les défauts' : undefined}
+          className="text-sm text-stone-600 underline disabled:opacity-40 dark:text-stone-400"
+        >
           {saved ? 'Enregistré comme défauts' : 'Enregistrer comme défauts'}
         </button>
         <span className="text-xs text-stone-500">budget : {config.request_budget} requêtes</span>

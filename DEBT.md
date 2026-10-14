@@ -65,11 +65,11 @@ Rate limit par domaine enregistrable (fait avant toute requête réelle), fraîc
 - `cheaphops/api/app.py` : les recherches terminées restent en mémoire (`runs`). Plafond : un
   utilisateur, quelques recherches par session. Déclencheur : un serveur qui tourne des jours.
 
-## Reporté à la phase 2
+## Phase 2, review thermo-nuclear
 
-- 1c : `Segment.fetched_at` vaut l'heure du Verify, même quand la réponse vient du cache.
-  L'âge des prix affiché par l'UI doit venir de `http_cache.fetched_at` (le recipe ne le voit
-  pas aujourd'hui) : exposer l'âge dans `FetchResult` ou le relire depuis le cache.
-
-- F10 : un preset remplace `return_deadline` en entier (fusion superficielle), alors que
-  `config.local.yaml` fusionne en profondeur. À fixer par un test en phase 2.
+- B1, B2, N1, N3, N4, N5, N6 corrigés.
+- N2 : la progression du Verify n'est pas ventilée par source (une ligne « Verify » agrégée).
+  Déclencheur : une recherche où il faut savoir quelle source ralentit le Verify.
+- F10 (preset qui remplace `return_deadline` en entier) : toujours ouvert. Le formulaire envoie
+  la deadline complète, donc l'UI n'y est pas exposée ; seul un preset partiel dans
+  `config.yaml` l'est. Déclencheur : un preset qui ne précise que l'heure ou que le jour.

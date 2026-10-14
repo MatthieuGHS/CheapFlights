@@ -23,7 +23,10 @@ export default function App() {
     if (!runId) return
     return followSearch(runId, (e) => {
       setEvents((prev) => [...prev, e])
-      if (e.type === 'finished') void getSearch(runId).then(setStatus)
+      if (e.type !== 'finished') return
+      getSearch(runId)
+        .then(setStatus)
+        .catch((err: unknown) => setStatus({ id: runId, done: true, error: String(err), result: null }))
     })
   }, [runId])
 

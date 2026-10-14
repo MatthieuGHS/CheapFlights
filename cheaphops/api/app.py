@@ -23,6 +23,7 @@ from pydantic import BaseModel, ValidationError
 from cheaphops.core.config import Config, load_config, load_ground
 from cheaphops.core.db import connect
 from cheaphops.core.models import SearchParams
+from cheaphops.fetch.http import Throttle
 from cheaphops.recipes.registry import load
 from cheaphops.search.engine import Event, SearchResult, run_search
 
@@ -60,6 +61,7 @@ def create_app(
 ) -> FastAPI:
     app = FastAPI(title="Cheap Hops")
     runs: dict[str, Run] = {}
+    throttle = Throttle()  # un seul par process : deux recherches ne doublent jamais la cadence
     local_path = config_path.with_name("config.local.yaml")
 
     def params_for(req: SearchRequest, config: Config) -> SearchParams:
@@ -77,14 +79,15 @@ def create_app(
         conn = connect(config.db_path)
         try:
             run.result = await search(
-                run.params, config, load_ground(ground_path), conn, today(), run.push
-            )
+                run.params, config, load_ground(ground_path), conn, today(), run.push,
+                throttle=throttle,
+            )  # fmt: skip
         except Exception as e:  # une recherche qui plante ne doit pas tuer le serveur
             run.error = f"{type(e).__name__}: {e}"
-        finally:
+        finally:  # même annulée, la recherche libère ses abonnés SSE
             conn.close()
-        run.done = True
-        run.push({"type": "finished", "error": run.error})
+            run.done = True
+            run.push({"type": "finished", "error": run.error})
 
     @app.get("/api/config")
     def get_config() -> dict[str, Any]:
@@ -93,6 +96,11 @@ def create_app(
             {
                 "defaults": config.search.defaults,
                 "presets": config.search.presets,
+                # origines possibles : celles qu'un trajet sol relie au domicile, plus le domicile
+                "origins": sorted(
+                    {config.search.defaults.home}
+                    | {x for e in load_ground(ground_path).edges for x in (e.a, e.b)}
+                ),
                 "request_budget": config.search.request_budget,
             }
         )
@@ -101,20 +109,19 @@ def create_app(
     @app.put("/api/config/defaults")
     def save_defaults(overrides: dict[str, Any]) -> dict[str, Any]:
         """Réglages de l'UI : écrits dans config.local.yaml, jamais dans config.yaml (§2.6)."""
-        local = yaml.safe_load(local_path.read_text()) if local_path.exists() else {}
-        local = local or {}
-        defaults = local.setdefault("search", {}).setdefault("defaults", {})
-        defaults.update(jsonable_encoder(overrides))
-        previous = local_path.read_text() if local_path.exists() else None
-        local_path.write_text(yaml.safe_dump(local, allow_unicode=True, sort_keys=False))
+        local = (yaml.safe_load(local_path.read_text()) if local_path.exists() else None) or {}
+        local.setdefault("search", {}).setdefault("defaults", {}).update(
+            jsonable_encoder(overrides)
+        )
+        draft = local_path.with_suffix(".yaml.tmp")
+        draft.write_text(yaml.safe_dump(local, allow_unicode=True, sort_keys=False))
         try:
-            return get_config()
-        except ValidationError as e:  # réglage invalide : on remet le fichier tel qu'il était
-            if previous is None:
-                local_path.unlink()
-            else:
-                local_path.write_text(previous)
+            load_config(config_path, draft)  # valide avant de remplacer le vrai fichier
+        except ValidationError as e:
+            draft.unlink()
             raise HTTPException(422, json.loads(e.json())) from e
+        draft.replace(local_path)
+        return get_config()
 
     @app.post("/api/searches")
     async def start(req: SearchRequest) -> dict[str, str]:
@@ -132,12 +139,9 @@ def create_app(
     @app.get("/api/searches/{run_id}")
     def status(run_id: str) -> dict[str, Any]:
         run = get_run(run_id)
-        r = run.result
         body: dict[str, Any] = jsonable_encoder({
             "id": run.id, "done": run.done, "error": run.error, "params": run.params,
-            "trips": r.trips if r else [], "requests": r.requests if r else None,
-            "budget_exhausted": r.budget_exhausted if r else None,
-            "candidates": r.candidates if r else None, "pruned": r.pruned if r else None,
+            "result": run.result,
         })  # fmt: skip
         return body
 
