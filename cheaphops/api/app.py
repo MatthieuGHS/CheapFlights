@@ -7,6 +7,7 @@ import asyncio
 import json
 import uuid
 from collections.abc import AsyncIterator, Awaitable, Callable
+from contextlib import closing
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime
 from pathlib import Path
@@ -73,13 +74,15 @@ def create_app(
             raise HTTPException(422, json.loads(e.json())) from e
 
     async def execute(run: Run, config: Config) -> None:
+        conn = connect(config.db_path)
         try:
             run.result = await search(
-                run.params, config, load_ground(ground_path), connect(config.db_path), today(),
-                run.push,
-            )  # fmt: skip
+                run.params, config, load_ground(ground_path), conn, today(), run.push
+            )
         except Exception as e:  # une recherche qui plante ne doit pas tuer le serveur
             run.error = f"{type(e).__name__}: {e}"
+        finally:
+            conn.close()
         run.done = True
         run.push({"type": "finished", "error": run.error})
 
@@ -161,24 +164,24 @@ def create_app(
     @app.get("/api/sources")
     def sources() -> list[dict[str, Any]]:
         config = load_config(config_path)
-        conn = connect(config.db_path)
-        out = []
-        for name in config.search.sources:
-            m = load(name).manifest
-            state = conn.execute(
-                "SELECT blocked_until, reason FROM source_state WHERE source = ?", (name,)
-            ).fetchone()
-            rungs = conn.execute(
-                "SELECT rung, successes, failures, browser_requests, last_failure"
-                " FROM fetch_stats WHERE source = ? ORDER BY rung", (name,),
-            ).fetchall()  # fmt: skip
-            out.append({
-                "source": name, "version": m.version, "status": m.status,
-                "capabilities": sorted(m.capabilities), "preferred_rung": m.preferred_rung,
-                "blocked_until": state["blocked_until"] if state else None,
-                "blocked_reason": state["reason"] if state else None,
-                "rungs": [dict(r) for r in rungs],
-            })  # fmt: skip
+        with closing(connect(config.db_path)) as conn:
+            out = []
+            for name in config.search.sources:
+                m = load(name).manifest
+                state = conn.execute(
+                    "SELECT blocked_until, reason FROM source_state WHERE source = ?", (name,)
+                ).fetchone()
+                rungs = conn.execute(
+                    "SELECT rung, successes, failures, browser_requests, last_failure"
+                    " FROM fetch_stats WHERE source = ? ORDER BY rung", (name,),
+                ).fetchall()  # fmt: skip
+                out.append({
+                    "source": name, "version": m.version, "status": m.status,
+                    "capabilities": sorted(m.capabilities), "preferred_rung": m.preferred_rung,
+                    "blocked_until": state["blocked_until"] if state else None,
+                    "blocked_reason": state["reason"] if state else None,
+                    "rungs": [dict(r) for r in rungs],
+                })  # fmt: skip
         return out
 
     if WEB_DIST.exists():  # interface construite (npm run build) servie à la racine

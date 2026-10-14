@@ -4,10 +4,12 @@ import { getConfig, saveDefaults, startSearch, type Config, type Defaults } from
 const WEEKDAYS = ['lun', 'mar', 'mer', 'jeu', 'ven', 'sam', 'dim']
 const ORIGINS = ['VNO', 'KUN', 'RIX']
 
+/** Date locale (pas UTC : à Vilnius, toISOString() donne la veille entre minuit et 3 h). */
 function isoDay(offsetDays: number): string {
   const d = new Date()
   d.setDate(d.getDate() + offsetDays)
-  return d.toISOString().slice(0, 10)
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
 }
 
 type Props = { running: boolean; onStarted: (id: string) => void }
