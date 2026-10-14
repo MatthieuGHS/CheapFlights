@@ -94,6 +94,8 @@ async def test_redirect_off_allowlist_blocked(conn: sqlite3.Connection, clock: F
         with pytest.raises(DomainNotAllowed):
             await http.get("https://www.ryanair.com/a", ttl_s=0)
     assert hosts == ["www.ryanair.com"]
+    row = conn.execute("SELECT failures, last_failure FROM fetch_stats").fetchone()
+    assert tuple(row) == (1, "DomainNotAllowed")  # signal anti-bot pour la classification §7
 
 
 async def test_cache_hit_until_ttl_expires(conn: sqlite3.Connection, clock: FakeClock) -> None:

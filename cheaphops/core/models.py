@@ -1,11 +1,21 @@
-from datetime import date, datetime, time, timedelta
+from datetime import date, time, timedelta
 from decimal import Decimal
 from enum import StrEnum
 from typing import Annotated, Literal, Self
 
-from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, StringConstraints, model_validator
+from pydantic import (
+    AwareDatetime,
+    BaseModel,
+    ConfigDict,
+    Field,
+    NaiveDatetime,
+    StringConstraints,
+    model_validator,
+)
 
 Iata = Annotated[str, StringConstraints(pattern=r"^[A-Z]{3}$")]
+# shortcut: refuse un TLD nu mais pas un suffixe public (co.uk, github.io) ; ajouter une liste
+# de suffixes publics quand le Pathfinder (phase 4) écrit des manifestes
 Domain = Annotated[str, StringConstraints(pattern=r"^[a-z0-9-]+(\.[a-z0-9-]+)+$")]
 Currency = Annotated[str, StringConstraints(pattern=r"^[A-Z]{3}$")]
 Price = Annotated[Decimal, Field(ge=0)]
@@ -45,8 +55,8 @@ class Flight(Model):
 class Blackout(Model):
     """Créneau d'indisponibilité, en heure locale de Vilnius."""
 
-    start: datetime
-    end: datetime
+    start: NaiveDatetime
+    end: NaiveDatetime
 
     @model_validator(mode="after")
     def _ordered(self) -> Self:

@@ -110,7 +110,7 @@ class CtxHttp:
         start = time.monotonic()
         try:
             resp = await self._client.send(req)
-        except httpx.HTTPError as e:
+        except (httpx.HTTPError, DomainNotAllowed) as e:  # redirection hors allowlist incluse
             self._record(time.monotonic() - start, type(e).__name__)
             raise
         failure = None if resp.is_success else f"HTTP {resp.status_code}"

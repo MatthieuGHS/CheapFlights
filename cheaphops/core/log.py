@@ -9,13 +9,13 @@ class JsonFormatter(logging.Formatter):
     """Une ligne JSON par événement ; les champs passés via `extra=` sont gardés tels quels."""
 
     def format(self, record: logging.LogRecord) -> str:
-        out = {
+        extra = {k: v for k, v in vars(record).items() if k not in _RESERVED}
+        out = extra | {
             "ts": self.formatTime(record),
             "level": record.levelname,
             "logger": record.name,
             "msg": record.getMessage(),
         }
-        out |= {k: v for k, v in vars(record).items() if k not in _RESERVED}
         if record.exc_info:
             out["exc"] = self.formatException(record.exc_info)
         return json.dumps(out, default=str, ensure_ascii=False)

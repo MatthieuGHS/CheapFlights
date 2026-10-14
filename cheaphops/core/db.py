@@ -18,7 +18,10 @@ def connect(path: Path | str) -> sqlite3.Connection:
 def migrate(conn: sqlite3.Connection) -> int:
     """Applique les fichiers NNN_*.sql plus récents que PRAGMA user_version, chacun atomiquement."""
     current: int = conn.execute("PRAGMA user_version").fetchone()[0]
-    for file in sorted(MIGRATIONS.glob("[0-9][0-9][0-9]_*.sql")):
+    files = sorted(MIGRATIONS.glob("[0-9][0-9][0-9]_*.sql"))
+    if len({f.name[:3] for f in files}) != len(files):
+        raise RuntimeError(f"duplicate migration number in {MIGRATIONS}")
+    for file in files:
         version = int(file.name[:3])
         if version > current:
             try:

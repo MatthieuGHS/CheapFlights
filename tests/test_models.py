@@ -68,3 +68,8 @@ def test_manifest_rejects_domains_that_widen_the_allowlist(domain: str) -> None:
             preferred_rung=1, rate_limit=RateLimit(min_interval_s=1, jitter_s=0),
             status=RecipeStatus.DRAFT,
         )  # fmt: skip
+
+
+def test_blackout_rejects_timezone_aware_bounds() -> None:
+    with pytest.raises(ValidationError):
+        Blackout(start=datetime(2026, 12, 14, 8, tzinfo=UTC), end=datetime(2026, 12, 18, 18))

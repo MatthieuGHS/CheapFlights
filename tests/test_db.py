@@ -37,3 +37,13 @@ def test_fts5_available() -> None:
     conn.execute("CREATE VIRTUAL TABLE t USING fts5(body)")
     conn.execute("INSERT INTO t VALUES ('403 GET /api/x')")
     assert conn.execute("SELECT count(*) FROM t WHERE t MATCH 'api'").fetchone()[0] == 1
+
+
+def test_duplicate_migration_number_refused(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    (tmp_path / "001_a.sql").write_text("CREATE TABLE a (x);")
+    (tmp_path / "001_b.sql").write_text("CREATE TABLE b (x);")
+    monkeypatch.setattr("cheaphops.core.db.MIGRATIONS", tmp_path)
+    with pytest.raises(RuntimeError, match="duplicate"):
+        migrate(sqlite3.connect(":memory:", isolation_level=None))
