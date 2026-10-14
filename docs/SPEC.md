@@ -100,7 +100,7 @@ fixtures/         # réponses réelles capturées (JSON/HTML) + résultat attend
 test_recipe.py    # tests de contrat sur fixtures
 ```
 
-Interface (une source n'implémente que ce qu'elle peut) :
+Interface (une source n'implémente que ce qu'elle peut). Un Protocol par capacité dans `cheaphops/recipes/base.py`. Le moteur sélectionne les sources par `manifest.capabilities`, jamais par `hasattr` à l'appel. Les signatures sont garanties par les tests de contrat, pas par le Protocol :
 
 ```python
 class Recipe(Protocol):
