@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Annotated, Any, Self
+from typing import Annotated, Any, Literal, Self
 
 import yaml
 from pydantic import Field, model_validator
@@ -51,21 +51,20 @@ class LlmConfig(Model):
 class SearchConfig(Model):
     defaults: SearchDefaults
     bound_slack: Annotated[float, Field(gt=0, le=1)]
-    presets: dict[str, dict[str, Any]]
+    presets: dict[str, SearchDefaults]
 
-    @model_validator(mode="after")
-    def _presets_valid(self) -> Self:
-        for name in self.presets:
-            self.preset(name)
-        return self
-
-    def preset(self, name: str) -> SearchDefaults:
-        return SearchDefaults.model_validate(self.defaults.model_dump() | self.presets[name])
+    @model_validator(mode="before")
+    @classmethod
+    def _presets_override_defaults(cls, data: Any) -> Any:
+        if isinstance(data, dict) and isinstance(data.get("defaults"), dict):
+            raw = data.get("presets") or {}
+            data = data | {"presets": {k: data["defaults"] | v for k, v in raw.items()}}
+        return data
 
 
 class Config(Model):
     db_path: Path
-    log_level: str
+    log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR"]
     http: HttpConfig
     llm: LlmConfig
     search: SearchConfig

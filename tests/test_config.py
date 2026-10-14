@@ -26,7 +26,7 @@ def test_repo_config_matches_spec_defaults() -> None:
 
 def test_weekend_preset_overrides_defaults() -> None:
     cfg = load_config(ROOT / "config.yaml", ROOT / "absent.yaml")
-    w = cfg.search.preset("weekend")
+    w = cfg.search.presets["weekend"]
     assert w.depart_weekdays == [4, 5] and w.return_weekdays == [6, 0]
     assert w.return_deadline is not None
     assert (w.return_deadline.at, w.return_deadline.weekday) == (time(12, 0), 0)
