@@ -98,15 +98,10 @@ class StealthCookieTransport:
     async def _bootstrap(self) -> CurlTransport:
         from scrapling.fetchers import StealthyFetcher  # import lourd : seulement si le rung sert
 
-        def count(page: Any) -> None:
-            page.on(
-                "request", lambda _: setattr(self, "_browser_requests", self._browser_requests + 1)
-            )
-
         try:
             page = await StealthyFetcher.async_fetch(
                 self._manifest.home_url,
-                page_setup=count,
+                page_setup=lambda page: page.on("request", self._count),
                 headless=self._cfg.browser_headless,
                 solve_cloudflare=False,  # §2.3 : aucun contournement de CAPTCHA
                 disable_resources=True,
@@ -121,6 +116,9 @@ class StealthCookieTransport:
     async def aclose(self) -> None:
         if self._curl is not None:
             await self._curl.aclose()
+
+    def _count(self, _: Any) -> None:
+        self._browser_requests += 1
 
     def take_browser_requests(self) -> int:
         n, self._browser_requests = self._browser_requests, 0
@@ -149,7 +147,9 @@ class BrowserTransport:
         self._ctx: BrowserContext | None = None
         self._page: Page | None = None
         self._lock = asyncio.Lock()
-        self._browser_requests = 0  # toutes les requêtes de la page, moins nos propres envois
+        # toutes les requêtes de la page moins nos envois ; les préflights CORS de nos POST y
+        # restent comptés (une unité par appel, chiffre d'information seulement)
+        self._browser_requests = 0
 
     async def send(self, req: HttpRequest) -> FetchResult:
         try:

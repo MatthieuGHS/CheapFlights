@@ -68,12 +68,12 @@ class Recipe:
             self._version = found.group(1)
         return f"https://be.wizzair.com/{self._version}/Api"
 
-    async def _call(self, ctx: Ctx, path: str, **kwargs: Any) -> FetchResult:
-        """GET, ou POST si `json` est fourni ; sur 404, la version est relue puis l'appel rejoué."""
+    async def _call(self, ctx: Ctx, method: str, path: str, **kwargs: Any) -> FetchResult:
+        """Sur 404, la version de l'API est relue sur l'accueil puis l'appel rejoué une fois."""
         for refresh in (False, True):
             url = await self._api_base(ctx, refresh) + path
             try:
-                if "json" in kwargs:
+                if method == "POST":
                     return await ctx.http.post(url, headers=HEADERS, **kwargs)
                 return await ctx.http.get(url, **kwargs)
             except FetchFailed as e:
@@ -83,7 +83,7 @@ class Recipe:
 
     async def routes(self, ctx: Ctx, origin: str) -> list[str]:
         r = await self._call(
-            ctx, "/asset/map", params={"languageCode": "en-gb"}, freshness="explore"
+            ctx, "GET", "/asset/map", params={"languageCode": "en-gb"}, freshness="explore"
         )
         try:
             cities = r.json()["cities"]
@@ -121,7 +121,7 @@ class Recipe:
                     {"departureStation": b, "arrivalStation": a, "date": stamp},
                 ],
             }  # fmt: skip
-            r = await self._call(ctx, "/asset/farechart", json=body, freshness="explore")
+            r = await self._call(ctx, "POST", "/asset/farechart", json=body, freshness="explore")
             leg = "outboundFlights" if (a, b) == (o, d) else "returnFlights"
             for fare in parse_farechart(r.text, leg):
                 if fare.day.month == month.month and (
