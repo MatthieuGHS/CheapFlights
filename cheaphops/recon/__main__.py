@@ -11,12 +11,15 @@ from urllib.parse import urlsplit
 
 from playwright.async_api import Request, Response, Route, async_playwright
 
+from cheaphops.fetch.http import registrable_domain
 from cheaphops.recon.analyze import Captured, candidate, visible_prices
 
 SKIPPED_RESOURCES = {"image", "media", "font"}  # scraping respectueux : rien d'inutile
 
 
-async def capture(url: str, headed: bool, wait_s: float) -> tuple[list[Captured], str, int]:
+async def capture(
+    url: str, headed: bool, wait_s: float, third_party: bool, clicks: list[str]
+) -> tuple[list[Captured], str, int]:
     captured: list[Captured] = []
     tasks: list[asyncio.Task[None]] = []
     sent = 0
@@ -36,8 +39,11 @@ async def capture(url: str, headed: bool, wait_s: float) -> tuple[list[Captured]
         nonlocal sent
         sent += 1
 
+    site = registrable_domain(url)
+
     async def route(r: Route) -> None:
-        if r.request.resource_type in SKIPPED_RESOURCES:
+        foreign = not third_party and registrable_domain(r.request.url) != site
+        if foreign or r.request.resource_type in SKIPPED_RESOURCES:
             await r.abort()
         else:
             await r.continue_()
@@ -49,6 +55,9 @@ async def capture(url: str, headed: bool, wait_s: float) -> tuple[list[Captured]
         page.on("request", count)
         page.on("response", lambda r: tasks.append(asyncio.ensure_future(keep(r))))
         await page.goto(url, wait_until="networkidle", timeout=60_000)
+        for label in clicks:  # scénario minimal : bandeau cookies, bouton « rechercher »…
+            await page.get_by_text(label, exact=True).first.click(timeout=10_000)
+            await page.wait_for_load_state("networkidle")
         await page.wait_for_timeout(wait_s * 1000)  # mode headed : le temps de naviguer à la main
         text = await page.inner_text("body")
         await asyncio.gather(*tasks)
@@ -63,22 +72,26 @@ def main() -> int:
     ap.add_argument("--out", type=Path)
     ap.add_argument("--headed", action="store_true")
     ap.add_argument("--wait", type=float, default=3.0, help="secondes après le chargement")
+    ap.add_argument(
+        "--click", action="append", default=[], help="texte exact à cliquer, dans l'ordre"
+    )
+    ap.add_argument("--third-party", action="store_true", help="ne pas bloquer les autres domaines")
     args = ap.parse_args()
 
     stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%S")
     out: Path = args.out or Path("data/recon") / f"{urlsplit(args.url).hostname}-{stamp}"
     out.mkdir(parents=True, exist_ok=True)
 
-    captured, text, sent = asyncio.run(capture(args.url, args.headed, args.wait))
+    captured, text, sent = asyncio.run(
+        capture(args.url, args.headed, args.wait, args.third_party, args.click)
+    )
     needs_price = "routes" not in args.goal.lower()
     found = []
     for i, c in enumerate(captured):
-        cand = candidate(c, needs_price)
-        if cand is None:
-            continue
-        cand["response_file"] = f"resp_{i:02d}.json"
-        (out / cand["response_file"]).write_text(json.dumps(c.body, ensure_ascii=False, indent=1))
-        found.append(cand)
+        name = f"resp_{i:02d}.json"  # toutes les réponses JSON : un recon de plus coûte plus cher
+        (out / name).write_text(json.dumps(c.body, ensure_ascii=False, indent=1))
+        if (cand := candidate(c, needs_price)) is not None:
+            found.append(cand | {"response_file": name})
 
     (out / "candidates.json").write_text(json.dumps(found, ensure_ascii=False, indent=1))
     (out / "page.txt").write_text(text)
@@ -87,13 +100,13 @@ def main() -> int:
         "goal": args.goal,
         "captured_at": stamp,
         "requests_sent": sent,
-        "json_responses": len(captured),
+        "json_urls": {f"resp_{i:02d}.json": c.url[:200] for i, c in enumerate(captured)},
         "visible_prices": visible_prices(text)[:50],
     }
     (out / "meta.json").write_text(json.dumps(meta, ensure_ascii=False, indent=1))
     print(f"{out} : {len(found)} candidates / {len(captured)} JSON, {sent} requêtes envoyées")
     for f in found:
-        print(f"  {f['method']} {f['url_template']}  {f['signals']}")
+        print(f"  {f['method']} {f['url_template'][:120]}  {f['signals']}")
     return 0 if found else 1
 
 

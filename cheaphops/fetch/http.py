@@ -131,21 +131,27 @@ class CtxHttp:
         self._check_allowed(req.url)
         self._check_not_blocked()
         ttl, key = self._ttl[freshness], self._cache_key(req)
-        if ttl and (hit := self._cached(key)):
+        if ttl and (hit := self._cached(key, ttl)):
             return hit
         rung = start_rung(self._stats(), self._manifest.preferred_rung)
         backoff = self._cfg.rate_limited_backoff_s
         outcome, result = Outcome.FAILED, None
         for _ in range(self._cfg.max_attempts):
-            result, latency = await self._send(rung, req)
-            outcome = classify(result, self._cfg)
+            try:
+                result, latency = await self._send(rung, req)
+            except TransportError:
+                if rung == RUNGS[-1]:
+                    raise FetchFailed(self._manifest.source, "transport", None) from None
+                rung += 1  # navigateur absent, timeout… : le rung suivant a d'autres moyens
+                continue
+            outcome = classify(result, self._cfg, self._manifest.block_markers)
             # 404/5xx : le rung a bien livré une réponse, ce n'est pas un échec de rung
             rung_ok = outcome in (Outcome.OK, Outcome.FAILED)
             self._record(rung, None if rung_ok else f"{outcome} HTTP {result.status}", latency)
             if outcome is Outcome.OK:
                 self._set_blocked(None)
                 if ttl:
-                    self._store(key, result, ttl)
+                    self._store(key, result)
                 return result
             if outcome is Outcome.CAPTCHA or (outcome is Outcome.BLOCKED and rung == RUNGS[-1]):
                 self._set_blocked(f"{outcome} at rung {rung}")
@@ -170,7 +176,7 @@ class CtxHttp:
                 result = await transport.send(req)
             except TransportError as e:
                 self._record(rung, str(e)[:200], latency + time.monotonic() - start)
-                raise FetchFailed(self._manifest.source, "transport", None) from e
+                raise
             latency += time.monotonic() - start
             location = result.header("location")
             if transport.follows_redirects or not (300 <= result.status < 400 and location):
@@ -227,19 +233,21 @@ class CtxHttp:
 
     # shortcut: sqlite synchrone dans l'event loop, ok pour un utilisateur ; passer par
     # asyncio.to_thread si la latence SSE de la phase 2 en souffre
-    def _cached(self, key: str) -> FetchResult | None:
+    def _cached(self, key: str, ttl: int) -> FetchResult | None:
+        """Une entrée sert si elle a moins de `ttl` secondes : une réponse mise en cache par
+        l'Explore (6 h) n'est pas assez fraîche pour le Verify (15 min)."""
         row = self._conn.execute(
             "SELECT url, status, headers, body, rung FROM http_cache"
-            " WHERE key = ? AND expires_at > ?",
-            (key, self._now()),
+            " WHERE key = ? AND fetched_at > ?",
+            (key, self._now() - ttl),
         ).fetchone()
         if row is None:
             return None
         headers = tuple((k, v) for k, v in json.loads(row["headers"]))
         return FetchResult(row["url"], row["status"], headers, row["body"], row["rung"], True)
 
-    def _store(self, key: str, r: FetchResult, ttl_s: int) -> None:
-        now = self._now()
+    def _store(self, key: str, r: FetchResult) -> None:
+        now, ttl_s = self._now(), max(self._ttl.values())
         self._conn.execute("DELETE FROM http_cache WHERE expires_at <= ?", (now,))
         self._conn.execute(
             "INSERT OR REPLACE INTO http_cache VALUES (?, ?, ?, ?, ?, ?, ?, ?)",

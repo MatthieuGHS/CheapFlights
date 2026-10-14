@@ -152,6 +152,7 @@ class Manifest(Model):
     capabilities: Annotated[set[Capability], Field(min_length=1)]
     allowed_domains: Annotated[list[Domain], Field(min_length=1)]
     home_url: Annotated[str, StringConstraints(pattern=r"^https://")]  # amorce des rungs 3-4
+    block_markers: list[str]  # refus anti-bot propres à la source, en plus de ceux de la config
     preferred_rung: Annotated[int, Field(ge=1, le=4)]
     rate_limit: RateLimit
     status: RecipeStatus

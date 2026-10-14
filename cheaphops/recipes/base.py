@@ -26,3 +26,17 @@ class DayFlights(Protocol):
 
 class BookingUrl(Protocol):
     def booking_url(self, flight: Flight) -> str | None: ...
+
+
+class RecipeError(Exception):
+    """Déclencheur du Medic (§7) : la réponse ne correspond plus à ce que la recette attend."""
+
+    kind = "recipe_error"
+
+
+class SchemaMismatch(RecipeError):
+    kind = "schema_mismatch"
+
+
+class PriceAnomaly(RecipeError):
+    kind = "price_anomaly"

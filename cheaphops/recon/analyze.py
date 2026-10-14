@@ -74,4 +74,4 @@ def candidate(c: Captured, needs_price: bool) -> dict[str, Any] | None:
 
 
 def visible_prices(page_text: str) -> list[str]:
-    return [m.group(0).strip() for m in VISIBLE_PRICE.finditer(page_text)]
+    return [" ".join(m.group(0).split()) for m in VISIBLE_PRICE.finditer(page_text)]

@@ -16,16 +16,20 @@ class Outcome(StrEnum):
     FAILED = "failed"  # 404, 5xx… : rien à gagner à changer de rung
 
 
-def classify(r: FetchResult, cfg: HttpConfig) -> Outcome:
+def classify(r: FetchResult, cfg: HttpConfig, source_markers: list[str]) -> Outcome:
+    """`source_markers` : signatures de refus propres à une source (manifeste), ex. le
+    `409 Availability declined` de Ryanair."""
+    ok = 200 <= r.status < 300
     is_json = "json" in (r.header("content-type") or "")
-    body = "" if is_json else r.text[:50_000].lower()  # un JSON valide n'est jamais un mur anti-bot
+    body = "" if ok and is_json else r.text[:50_000].lower()  # données servies : jamais un mur
     if any(m.lower() in body for m in cfg.captcha_markers):
         return Outcome.CAPTCHA
     if r.status == 429:
         return Outcome.RATE_LIMITED
-    if r.status in (401, 403) or any(m.lower() in body for m in cfg.block_markers):
+    markers = [*cfg.block_markers, *source_markers]
+    if r.status in (401, 403) or any(m.lower() in body for m in markers):
         return Outcome.BLOCKED
-    return Outcome.OK if 200 <= r.status < 300 else Outcome.FAILED
+    return Outcome.OK if ok else Outcome.FAILED
 
 
 def start_rung(stats: dict[int, tuple[int, int]], preferred: int) -> int:

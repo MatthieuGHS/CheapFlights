@@ -34,6 +34,7 @@ def manifest(source: str = "ryanair", domains: tuple[str, ...] = ("ryanair.com",
             "allowed_domains": list(domains),
             "home_url": f"https://www.{domains[0]}/",
             "preferred_rung": 1,
+            "block_markers": ["Availability declined"],
             "rate_limit": {"min_interval_s": 2.0, "jitter_s": 0.5},
             "status": "active",
         }
@@ -251,6 +252,13 @@ async def test_captcha_blocks_source_without_climbing(
     assert ts[1].sent == []
 
 
+async def test_source_marker_in_json_error_climbs(
+    conn: sqlite3.Connection, clock: FakeClock
+) -> None:
+    http, _ = make(conn, clock, lambda req: (409, JSON, '{"message":"Availability declined"}'), ok)
+    assert (await http.get("https://www.ryanair.com/x", freshness="none")).rung == 2
+
+
 async def test_json_mentioning_captcha_is_ok(conn: sqlite3.Connection, clock: FakeClock) -> None:
     http, _ = make(conn, clock, lambda req: (200, JSON, '{"captcha": false}'))
     assert (await http.get("https://www.ryanair.com/x", freshness="none")).status == 200
@@ -281,10 +289,12 @@ async def test_transport_error_counted_and_raised(
     http, _ = make(conn, clock, lambda req: TransportError("down"))
     with pytest.raises(FetchFailed, match="transport"):
         await http.get("https://www.ryanair.com/x", freshness="none")
-    assert conn.execute("SELECT failures, last_failure FROM fetch_stats").fetchone()[:] == (
-        1,
-        "down",
-    )
+    assert stats(conn) == {1: (0, 1), 2: (0, 1), 3: (0, 1), 4: (0, 1)}  # chaque rung tenté
+
+
+async def test_transport_error_climbs(conn: sqlite3.Connection, clock: FakeClock) -> None:
+    http, _ = make(conn, clock, lambda req: TransportError("no browser"), ok)
+    assert (await http.get("https://www.ryanair.com/x", freshness="none")).rung == 2
 
 
 async def test_next_request_starts_on_rung_that_worked(
@@ -327,3 +337,14 @@ async def test_throttle_does_not_couple_different_domains(clock: FakeClock) -> N
 def test_registrable_domain_uses_public_suffix_list() -> None:
     assert registrable_domain("https://services-api.ryanair.com/x") == "ryanair.com"
     assert registrable_domain("https://a.b.example.co.uk/") == "example.co.uk"
+
+
+async def test_explore_cache_entry_too_old_for_verify(
+    conn: sqlite3.Connection, clock: FakeClock
+) -> None:
+    http, ts = make(conn, clock, ok)
+    await http.get("https://www.ryanair.com/x", freshness="explore")
+    clock.t += CFG.verify_ttl_s + 1
+    assert (await http.get("https://www.ryanair.com/x", freshness="explore")).from_cache
+    assert not (await http.get("https://www.ryanair.com/x", freshness="verify")).from_cache
+    assert len(ts[0].sent) == 2
