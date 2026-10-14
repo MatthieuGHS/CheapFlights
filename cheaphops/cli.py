@@ -68,7 +68,18 @@ def main(argv: list[str] | None = None) -> int:
     s.add_argument("--weeks", type=int, help="fenêtre de départ en semaines")
     s.add_argument("--top", type=int, help="nombre de résultats")
     s.add_argument("--budget", type=int, help="requêtes de scraping max (défaut : config)")
+    srv = sub.add_parser("serve", help="API + interface web sur http://127.0.0.1:PORT")
+    srv.add_argument("--port", type=int, default=8000)
     args = ap.parse_args(argv)
+
+    if args.command == "serve":
+        import uvicorn
+
+        from cheaphops.api.app import create_app
+
+        setup_logging(load_config().log_level)
+        uvicorn.run(create_app(), host="127.0.0.1", port=args.port)  # local uniquement
+        return 0
 
     config = load_config()
     if args.budget is not None:
