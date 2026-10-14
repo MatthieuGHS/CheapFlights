@@ -3,19 +3,25 @@
 Généré par `/ponytail-debt` : un raccourci = un commentaire `shortcut:` dans le code.
 À régénérer en fin de phase.
 
-## Marqueurs `shortcut:` (ledger `/ponytail-debt`, fin de 1a)
+## Marqueurs `shortcut:` (ledger `/ponytail-debt`, fin de 1b)
 
-- `cheaphops/fetch/http.py:233`. SQLite synchrone dans l'event loop. Plafond : un utilisateur.
+Les phases 3 à 5 sont en pause : les déclencheurs qui les citaient visent désormais les skills
+projet ou un symptôme observable.
+
+- `cheaphops/fetch/http.py:235`. SQLite synchrone dans l'event loop. Plafond : un utilisateur.
   Déclencheur : la latence SSE de la phase 2 en souffre, alors `asyncio.to_thread`.
 - `cheaphops/core/models.py:17`. Le regex `Domain` accepte un suffixe public (`co.uk`).
-  Déclencheur : phase 4 (Pathfinder), Public Suffix List via `tldextract`, pas de liste maison.
+  Déclencheur : le skill `add-source` écrit un manifeste ; passer alors par la Public Suffix List
+  (`tldextract`, déjà installé), pas de liste maison.
 - `cheaphops/recipes/ryanair/v1/manifest.yaml:6`. `home_url` à date fixe (2026-11-13).
   Déclencheur : avant cette date, vérifier en live que la page pose encore les cookies, sinon
   générer l'URL avec une date future.
-- `cheaphops/fetch/ladder.py:39`. Heuristique déterministe de choix du rung.
-  Déclencheur : phase 5, Thompson sampling (Beta).
+- `cheaphops/fetch/ladder.py:45`. Heuristique déterministe du rung de départ. Déclencheur : des
+  rungs qui oscillent d'une recherche à l'autre (Thompson sampling, ex-phase 5).
+- `cheaphops/search/planner.py:10`. Budget de requêtes en arrêt net. Déclencheur : des
+  recherches qui épuisent le budget avant le Verify (bandit sur l'historique, ex-phase 5).
 
-4 marqueurs, 0 sans déclencheur. Le marqueur « httpx seul (rung 1) » de la phase 0 est soldé.
+5 marqueurs, 0 sans déclencheur.
 
 ## Phase 1a, soldé
 
@@ -37,6 +43,8 @@ Rate limit par domaine enregistrable (fait avant toute requête réelle), fraîc
   passer à 7 jours par appel.
 
 ## Phase 1b
+
+- Review thermo 1b : 6 findings, tous corrigés (7041ef7).
 
 - Wizz : piste « timetable » à explorer plus tard (recon headed de la page horaires de Wizz)
   pour trouver un endpoint d'horaires moins protégé que `search` (défi Kasada en automatique).
