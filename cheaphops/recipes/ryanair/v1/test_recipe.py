@@ -98,8 +98,7 @@ async def test_routes_html_body_raises_schema_mismatch(tmp_path: Path) -> None:
 
 
 def test_booking_url() -> None:
-    f = parse_availability(AVAIL.read_text())[0]
-    url = Recipe().booking_url(f)
+    url = Recipe().booking_url("VNO", "BGY", date(2026, 11, 4))
     assert url is not None and "dateOut=2026-11-04" in url and "destinationIata=BGY" in url
 
 

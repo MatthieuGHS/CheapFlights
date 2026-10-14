@@ -1,6 +1,6 @@
 import json
+import re
 from calendar import monthrange
-from collections.abc import Iterator
 from datetime import date, datetime, timedelta
 from decimal import Decimal
 from typing import Any
@@ -8,12 +8,15 @@ from typing import Any
 from pydantic import ValidationError
 
 from cheaphops.core.ctx import Ctx
-from cheaphops.core.models import DayFare, Flight
+from cheaphops.core.models import DayFare
+from cheaphops.fetch.http import FetchFailed
+from cheaphops.fetch.types import FetchResult
 from cheaphops.recipes.base import SchemaMismatch
-from cheaphops.skills.timeparse import with_offset
 
-# La version de l'API suit les déploiements du site : une dérive ici est un cas typique du Medic.
-API = "https://be.wizzair.com/29.20.1/Api"
+HOME = "https://www.wizzair.com/en-gb"
+# La version de l'API (« 29.20.1 » en octobre 2026) change à chaque déploiement : elle est lue
+# dans le HTML de l'accueil, puis relue quand l'API répond 404.
+API_VERSION = re.compile(r"be\.wizzair\.com\\?/(\d+\.\d+\.\d+)")
 HEADERS = {"accept": "application/json, text/plain, */*", "content-type": "application/json"}
 DAY_INTERVAL = 9  # farechart renvoie ±9 jours autour de la date demandée
 WINDOW = 2 * DAY_INTERVAL + 1
@@ -49,41 +52,38 @@ def parse_farechart(text: str, leg: str) -> list[DayFare]:
         raise SchemaMismatch(f"wizzair farechart: {type(e).__name__}: {e}") from e
 
 
-def parse_search(text: str) -> list[Flight]:
-    try:
-        return list(_flights(json.loads(text)))
-    except PARSE_ERRORS as e:
-        raise SchemaMismatch(f"wizzair search: {type(e).__name__}: {e}") from e
-
-
-def _flights(data: Any) -> Iterator[Flight]:
-    for f in (data["outboundFlights"] or []) + (data["returnFlights"] or []):
-        basic = [x for x in f["fares"] if x["bundle"] == "basic" and not x["isWdc"]]
-        if not basic:
-            raise KeyError("no regular basic fare")
-        fare = basic[0]
-        if fare["soldOut"]:
-            continue
-        # tarif normal (pas Discount Club) + frais de dossier, obligatoires à la réservation
-        price = Decimal(str(fare["basePrice"]["amount"])) + Decimal(
-            str(fare["administrationFeePrice"]["amount"])
-        )
-        yield Flight(
-            source="wizzair",
-            flight_no=f"{f['carrierCode']}{f['flightNumber'].strip()}",
-            origin=f["departureStation"],
-            destination=f["arrivalStation"],
-            departure=with_offset(f["departureDateTime"], f["departureTimeUtcOffset"]),
-            arrival=with_offset(f["arrivalDateTime"], f["arrivalTimeUtcOffset"]),
-            price=price,
-            currency=fare["basePrice"]["currencyCode"],
-        )
-
-
 class Recipe:
+    """Pas de `day_flights` : l'endpoint `search` (horaires) renvoie un défi Kasada à tout
+    navigateur automatisé. Wizz ne fournit que des prix au jour (voir DEBT.md, piste timetable)."""
+
+    def __init__(self) -> None:
+        self._version: str | None = None
+
+    async def _api_base(self, ctx: Ctx, refresh: bool) -> str:
+        if self._version is None or refresh:
+            home = await ctx.http.get(HOME, freshness="none" if refresh else "explore")
+            found = API_VERSION.search(home.text)
+            if found is None:
+                raise SchemaMismatch("wizzair: API version not found on home page")
+            self._version = found.group(1)
+        return f"https://be.wizzair.com/{self._version}/Api"
+
+    async def _call(self, ctx: Ctx, path: str, **kwargs: Any) -> FetchResult:
+        """GET, ou POST si `json` est fourni ; sur 404, la version est relue puis l'appel rejoué."""
+        for refresh in (False, True):
+            url = await self._api_base(ctx, refresh) + path
+            try:
+                if "json" in kwargs:
+                    return await ctx.http.post(url, headers=HEADERS, **kwargs)
+                return await ctx.http.get(url, **kwargs)
+            except FetchFailed as e:
+                if refresh or e.result is None or e.result.status != 404:
+                    raise
+        raise AssertionError("unreachable")
+
     async def routes(self, ctx: Ctx, origin: str) -> list[str]:
-        r = await ctx.http.get(
-            f"{API}/asset/map", params={"languageCode": "en-gb"}, freshness="explore"
+        r = await self._call(
+            ctx, "/asset/map", params={"languageCode": "en-gb"}, freshness="explore"
         )
         try:
             cities = r.json()["cities"]
@@ -121,9 +121,7 @@ class Recipe:
                     {"departureStation": b, "arrivalStation": a, "date": stamp},
                 ],
             }  # fmt: skip
-            r = await ctx.http.post(
-                f"{API}/asset/farechart", json=body, headers=HEADERS, freshness="explore"
-            )
+            r = await self._call(ctx, "/asset/farechart", json=body, freshness="explore")
             leg = "outboundFlights" if (a, b) == (o, d) else "returnFlights"
             for fare in parse_farechart(r.text, leg):
                 if fare.day.month == month.month and (
@@ -132,21 +130,5 @@ class Recipe:
                     best[fare.day] = fare
         return [best[day] for day in sorted(best)]
 
-    async def day_flights(self, ctx: Ctx, o: str, d: str, day: date) -> list[Flight]:
-        body = {
-            "isFlightChange": False,
-            "flightList": [
-                {"departureStation": o, "arrivalStation": d, "departureDate": f"{day}T00:00:00"}
-            ],
-            "adultCount": 1, "childCount": 0, "infantCount": 0, "wdc": False,
-        }  # fmt: skip
-        r = await ctx.http.post(
-            f"{API}/search/search", json=body, headers=HEADERS, freshness="verify"
-        )
-        return [f for f in parse_search(r.text) if f.departure.date() == day]
-
-    def booking_url(self, flight: Flight) -> str | None:
-        return (
-            f"https://www.wizzair.com/en-gb/booking/select-flight/{flight.origin}/"
-            f"{flight.destination}/{flight.departure.date().isoformat()}/null/1/0/0/null"
-        )
+    def booking_url(self, o: str, d: str, day: date) -> str | None:
+        return f"https://www.wizzair.com/en-gb/booking/select-flight/{o}/{d}/{day}/null/1/0/0/null"

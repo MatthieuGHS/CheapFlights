@@ -27,19 +27,20 @@ async def main(source: str, o: str, d: str, month: str) -> None:
         print(f"routes {o}: {len(routes)} -> {routes}")
         fares = await loaded.recipe.calendar(ctx, o, d, date.fromisoformat(month + "-01"))
         print(f"calendar {o}-{d} {month}: {[(f.day.isoformat(), str(f.price)) for f in fares]}")
-        if fares:
-            flights = await loaded.recipe.day_flights(ctx, o, d, fares[0].day)
-            for f in flights:
+        if fares and "day_flights" in loaded.manifest.capabilities:
+            for f in await loaded.recipe.day_flights(ctx, o, d, fares[0].day):
                 print(f"  {f.flight_no} {f.departure} -> {f.arrival} {f.price}")
-                print(f"  {loaded.recipe.booking_url(f)}")
+        if fares:
+            print(f"  {loaded.recipe.booking_url(o, d, fares[0].day)}")
     after = conn.execute(
         "SELECT coalesce(sum(successes + failures), 0) FROM fetch_stats"
     ).fetchone()[0]
     rungs = conn.execute(
-        "SELECT rung, successes, failures, last_failure FROM fetch_stats WHERE source = ?",
+        "SELECT rung, successes, failures, browser_requests FROM fetch_stats WHERE source = ?",
         (source,),
     ).fetchall()
-    print(f"requêtes réelles : {after - before} ; stats {[tuple(r) for r in rungs]}")
+    print(f"requêtes de scraping : {after - before}")
+    print(f"stats (rung, succès, échecs, ressources navigateur) : {[tuple(r) for r in rungs]}")
 
 
 if __name__ == "__main__":

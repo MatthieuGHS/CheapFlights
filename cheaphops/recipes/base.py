@@ -25,7 +25,10 @@ class DayFlights(Protocol):
 
 
 class BookingUrl(Protocol):
-    def booking_url(self, flight: Flight) -> str | None: ...
+    """Lien de réservation d'un trajet simple : il ne dépend que de la route et du jour, ce qui
+    sert aussi aux sources sans horaires (Wizz)."""
+
+    def booking_url(self, o: str, d: str, day: date) -> str | None: ...
 
 
 class RecipeError(Exception):

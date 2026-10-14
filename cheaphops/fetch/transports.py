@@ -41,6 +41,9 @@ class HttpxTransport:
     async def aclose(self) -> None:
         await self._client.aclose()
 
+    def take_browser_requests(self) -> int:
+        return 0
+
 
 class CurlTransport:
     follows_redirects = False
@@ -70,6 +73,9 @@ class CurlTransport:
     async def aclose(self) -> None:
         await self._session.close()
 
+    def take_browser_requests(self) -> int:
+        return 0
+
 
 class StealthCookieTransport:
     """Rung 3 : une visite de `home_url` par le navigateur furtif fournit les cookies, réutilisés
@@ -81,6 +87,7 @@ class StealthCookieTransport:
         self._cfg, self._manifest = cfg, manifest
         self._curl: CurlTransport | None = None
         self._lock = asyncio.Lock()  # un seul amorçage même si plusieurs envois arrivent ensemble
+        self._browser_requests = 0
 
     async def send(self, req: HttpRequest) -> FetchResult:
         async with self._lock:
@@ -91,9 +98,15 @@ class StealthCookieTransport:
     async def _bootstrap(self) -> CurlTransport:
         from scrapling.fetchers import StealthyFetcher  # import lourd : seulement si le rung sert
 
+        def count(page: Any) -> None:
+            page.on(
+                "request", lambda _: setattr(self, "_browser_requests", self._browser_requests + 1)
+            )
+
         try:
             page = await StealthyFetcher.async_fetch(
                 self._manifest.home_url,
+                page_setup=count,
                 headless=self._cfg.browser_headless,
                 solve_cloudflare=False,  # §2.3 : aucun contournement de CAPTCHA
                 disable_resources=True,
@@ -108,6 +121,10 @@ class StealthCookieTransport:
     async def aclose(self) -> None:
         if self._curl is not None:
             await self._curl.aclose()
+
+    def take_browser_requests(self) -> int:
+        n, self._browser_requests = self._browser_requests, 0
+        return n
 
 
 _FETCH_JS = """async ([url, method, headers, body, cookieHeaders]) => {
@@ -132,6 +149,7 @@ class BrowserTransport:
         self._ctx: BrowserContext | None = None
         self._page: Page | None = None
         self._lock = asyncio.Lock()
+        self._browser_requests = 0  # toutes les requêtes de la page, moins nos propres envois
 
     async def send(self, req: HttpRequest) -> FetchResult:
         try:
@@ -141,6 +159,7 @@ class BrowserTransport:
             cookie_headers = list(self._manifest.cookie_headers.items())
             args = [req.url, req.method, dict(req.headers), body, cookie_headers]
             out = await page.evaluate(_FETCH_JS, args)
+            self._browser_requests -= 1
         except Exception as e:  # erreurs Playwright : navigateur, réseau, JS
             raise TransportError(f"browser: {e}") from e
         headers = tuple((k, v) for k, v in out["headers"])
@@ -155,9 +174,18 @@ class BrowserTransport:
             headless=self._cfg.browser_headless and not self._manifest.headed,
         )
         page = await self._ctx.new_page()
+
+        def count(_: Any) -> None:
+            self._browser_requests += 1
+
+        page.on("request", count)
         await page.goto(self._manifest.home_url, timeout=self._cfg.timeout_s * 1000)
         self._page = page  # seulement une fois la page chargée, avec les cookies du site
         return page
+
+    def take_browser_requests(self) -> int:
+        n, self._browser_requests = max(self._browser_requests, 0), 0
+        return n
 
     async def aclose(self) -> None:
         if self._ctx is not None:

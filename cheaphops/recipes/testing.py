@@ -36,6 +36,9 @@ class FixtureTransport:
     async def aclose(self) -> None:
         pass
 
+    def take_browser_requests(self) -> int:
+        return 0
+
 
 async def _no_sleep(_: float) -> None:
     pass

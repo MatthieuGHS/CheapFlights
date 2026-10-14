@@ -107,9 +107,8 @@ class Recipe:
         flights = await self._window(ctx, o, d, window_start(day), verify=True)
         return [f for f in flights if f.departure.date() == day]
 
-    def booking_url(self, flight: Flight) -> str | None:
+    def booking_url(self, o: str, d: str, day: date) -> str | None:
         return (
             "https://www.ryanair.com/gb/en/trip/flights/select?adults=1&teens=0&children=0"
-            f"&infants=0&isReturn=false&dateOut={flight.departure.date().isoformat()}"
-            f"&originIata={flight.origin}&destinationIata={flight.destination}"
+            f"&infants=0&isReturn=false&dateOut={day.isoformat()}&originIata={o}&destinationIata={d}"
         )

@@ -1,6 +1,6 @@
 source: wizzair
 version: 1
-capabilities: [routes, calendar, day_flights, booking_url]
+capabilities: [routes, calendar, booking_url]   # search (horaires) bloqué par Kasada
 allowed_domains: [wizzair.com]
 home_url: https://www.wizzair.com/en-gb
 # Kasada protège l'API (en-têtes x-kpsdk-* générés par le JS de la page) et renvoie 405 à tout
@@ -17,5 +17,6 @@ status: active
 # Endpoints découverts par recon headed le 2026-10-14 (data/recon/wizz-headed2) :
 # - routes : GET  /Api/asset/map (liaisons directes de toutes les stations)
 # - calendrier : POST /Api/asset/farechart (±dayInterval jours, aller et retour, wdc:false)
-# - vols du jour : POST /Api/search/search
+# - vols du jour : POST /Api/search/search -> défi Kasada en automatique, non utilisé
+# - version de l'API : lue dans le HTML de l'accueil (be.wizzair.com/<version>/Api)
 # Wizz regroupe VNO et KUN (« MAC ») : les réponses peuvent partir de l'autre aéroport.

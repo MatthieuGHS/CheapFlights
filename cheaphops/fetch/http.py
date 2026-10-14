@@ -177,6 +177,7 @@ class CtxHttp:
                 self._record(rung, str(e)[:200], latency + time.monotonic() - start)
                 raise
             latency += time.monotonic() - start
+            self._record_browser(rung, transport.take_browser_requests())
             location = result.header("location")
             if transport.follows_redirects or not (300 <= result.status < 400 and location):
                 self._check_hop(rung, result.url, latency)
@@ -260,10 +261,21 @@ class CtxHttp:
         )
         return {r["rung"]: (r["successes"], r["failures"]) for r in rows}
 
+    def _record_browser(self, rung: int, n: int) -> None:
+        if n:
+            self._conn.execute(
+                "INSERT INTO fetch_stats (source, rung, browser_requests) VALUES (?, ?, ?)"
+                " ON CONFLICT (source, rung) DO UPDATE"
+                " SET browser_requests = browser_requests + excluded.browser_requests",
+                (self._manifest.source, rung, n),
+            )
+
     def _record(self, rung: int, failure: str | None, latency: float) -> None:
         self._conn.execute(
             """
-            INSERT INTO fetch_stats VALUES (?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO fetch_stats
+                (source, rung, successes, failures, total_latency_s, last_failure, last_failure_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT (source, rung) DO UPDATE SET
                 successes = successes + excluded.successes,
                 failures = failures + excluded.failures,

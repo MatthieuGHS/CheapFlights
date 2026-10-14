@@ -64,6 +64,9 @@ class Scripted:
     async def aclose(self) -> None:
         pass
 
+    def take_browser_requests(self) -> int:
+        return 3 if self.rung == 4 else 0  # rung 4 : la page charge aussi ses propres ressources
+
 
 def ok(req: HttpRequest) -> Reply:
     return 200, JSON, json.dumps({"url": req.url})
@@ -225,6 +228,17 @@ async def test_blocked_climbs_one_rung(conn: sqlite3.Connection, clock: FakeCloc
     r = await http.get("https://www.ryanair.com/x", freshness="none")
     assert r.rung == 2 and len(ts[0].sent) == 1
     assert stats(conn) == {1: (0, 1), 2: (1, 0)}
+
+
+async def test_browser_resources_counted_apart_from_scraping_requests(
+    conn: sqlite3.Connection, clock: FakeClock
+) -> None:
+    http, _ = make(conn, clock, *[lambda req: (403, (), "x")] * 3, ok)
+    await http.get("https://www.ryanair.com/x", freshness="none")
+    row = conn.execute(
+        "SELECT successes, failures, browser_requests FROM fetch_stats WHERE rung = 4"
+    )
+    assert tuple(row.fetchone()) == (1, 0, 3)
 
 
 async def test_blocked_on_every_rung_marks_source_blocked_with_doubling_backoff(

@@ -36,6 +36,13 @@ Rate limit par domaine enregistrable (fait avant toute requête réelle), fraîc
 - Ryanair : `FlexDays` = 3 n'a été testé que sans `client-version` (409). Le retester pourrait
   passer à 7 jours par appel.
 
+## Phase 1b
+
+- Wizz : piste « timetable » à explorer plus tard (recon headed de la page horaires de Wizz)
+  pour trouver un endpoint d'horaires moins protégé que `search` (défi Kasada en automatique).
+- Wizz : le test du rung 4 sous Xvfb n'a pas été fait (paquet absent, pas de sudo) ; le rung 4
+  avait déjà échoué en fenêtre visible sur l'écran réel, cas le plus favorable.
+
 ## Reporté à la phase 2
 
 - F10 : un preset remplace `return_deadline` en entier (fusion superficielle), alors que
