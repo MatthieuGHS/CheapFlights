@@ -151,6 +151,7 @@ class Manifest(Model):
     version: Annotated[int, Field(ge=1)]
     capabilities: Annotated[set[Capability], Field(min_length=1)]
     allowed_domains: Annotated[list[Domain], Field(min_length=1)]
+    home_url: Annotated[str, StringConstraints(pattern=r"^https://")]  # amorce des rungs 3-4
     preferred_rung: Annotated[int, Field(ge=1, le=4)]
     rate_limit: RateLimit
     status: RecipeStatus

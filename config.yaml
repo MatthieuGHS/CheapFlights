@@ -10,6 +10,14 @@ http:
   vary_headers: [accept-language, x-currency, currency]  # à ajuster par source si besoin
   explore_ttl_s: 21600     # 6 h (calendriers, routes)
   verify_ttl_s: 900        # 15 min (vols détaillés)
+  max_attempts: 4          # par requête, montées de rung et 429 compris
+  rate_limited_backoff_s: 10   # à ajuster
+  blocked_backoff_s: 3600      # à ajuster
+  block_markers: [Access Denied, Request unsuccessful, _Incapsula_Resource, Pardon Our Interruption]  # à ajuster
+  captcha_markers: [captcha, challenge-platform, cf-turnstile, px-captcha]  # à ajuster
+  impersonate: chrome
+  browser_headless: true
+  browser_dir: data/browser
 
 llm:
   region: eu-north-1

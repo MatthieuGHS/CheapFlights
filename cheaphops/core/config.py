@@ -12,6 +12,14 @@ class HttpConfig(Model):
     vary_headers: list[str]  # headers qui changent la réponse : ils entrent dans la clé de cache
     explore_ttl_s: Annotated[int, Field(ge=0)]
     verify_ttl_s: Annotated[int, Field(ge=0)]
+    max_attempts: Annotated[int, Field(ge=1)]
+    rate_limited_backoff_s: Annotated[float, Field(gt=0)]  # 429 : doublé à chaque essai
+    blocked_backoff_s: Annotated[float, Field(gt=0)]  # source bloquée : doublé à chaque blocage
+    block_markers: list[str]  # corps de réponse d'un mur anti-bot -> monter d'un rung
+    captcha_markers: list[str]  # CAPTCHA -> source bloquée, jamais résolu
+    impersonate: str  # profil TLS curl_cffi des rungs 2 et 3
+    browser_headless: bool
+    browser_dir: Path  # profils persistants du rung 4
 
 
 class ModelPrice(Model):
