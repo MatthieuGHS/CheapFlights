@@ -9,11 +9,12 @@ from pydantic import ValidationError
 
 from cheaphops.core.ctx import Ctx
 from cheaphops.core.models import DayFare
-from cheaphops.fetch.http import FetchFailed
+from cheaphops.fetch.http import FetchFailed, Freshness
 from cheaphops.fetch.types import FetchResult
 from cheaphops.recipes.base import SchemaMismatch
 
-HOME = "https://www.wizzair.com/en-gb"
+HOME = "https://www.wizzair.com/en-gb"  # = home_url du manifeste
+Params = dict[str, str | int] | None
 # La version de l'API (« 29.20.1 » en octobre 2026) change à chaque déploiement : elle est lue
 # dans le HTML de l'accueil, puis relue quand l'API répond 404.
 API_VERSION = re.compile(r"be\.wizzair\.com\\?/(\d+\.\d+\.\d+)")
@@ -68,22 +69,27 @@ class Recipe:
             self._version = found.group(1)
         return f"https://be.wizzair.com/{self._version}/Api"
 
-    async def _call(self, ctx: Ctx, method: str, path: str, **kwargs: Any) -> FetchResult:
-        """Sur 404, la version de l'API est relue sur l'accueil puis l'appel rejoué une fois."""
-        for refresh in (False, True):
+    async def _call(
+        self, ctx: Ctx, path: str, *, freshness: Freshness, params: Params = None, json: Any = None
+    ) -> FetchResult:
+        """POST si `json` est fourni. Sur 404, la version de l'API est relue puis l'appel rejoué."""
+
+        async def call(refresh: bool) -> FetchResult:
             url = await self._api_base(ctx, refresh) + path
-            try:
-                if method == "POST":
-                    return await ctx.http.post(url, headers=HEADERS, **kwargs)
-                return await ctx.http.get(url, **kwargs)
-            except FetchFailed as e:
-                if refresh or e.result is None or e.result.status != 404:
-                    raise
-        raise AssertionError("unreachable")
+            if json is not None:
+                return await ctx.http.post(url, json=json, headers=HEADERS, freshness=freshness)
+            return await ctx.http.get(url, params=params, freshness=freshness)
+
+        try:
+            return await call(refresh=False)
+        except FetchFailed as e:
+            if e.result is None or e.result.status != 404:
+                raise
+            return await call(refresh=True)
 
     async def routes(self, ctx: Ctx, origin: str) -> list[str]:
         r = await self._call(
-            ctx, "GET", "/asset/map", params={"languageCode": "en-gb"}, freshness="explore"
+            ctx, "/asset/map", params={"languageCode": "en-gb"}, freshness="explore"
         )
         try:
             cities = r.json()["cities"]
@@ -105,13 +111,13 @@ class Recipe:
     async def calendar(self, ctx: Ctx, o: str, d: str, month: date) -> list[DayFare]:
         """Prix minimal par jour dans le sens o -> d. Avec le regroupement MAC, un jour peut
         porter l'autre aéroport de la zone (KUN pour VNO) : la vraie station est conservée."""
-        first, days = month.replace(day=1), monthrange(month.year, month.month)[1]
+        last = month.replace(day=monthrange(month.year, month.month)[1])
+        start = max(month.replace(day=1), ctx.today)  # jamais de jours passés
         a, b = _pair(o, d)
+        leg = "outboundFlights" if (a, b) == (o, d) else "returnFlights"
         best: dict[date, DayFare] = {}
-        for k in range(0, days, WINDOW):
-            center = max(first + timedelta(days=k + DAY_INTERVAL), ctx.today)
-            if center - timedelta(days=DAY_INTERVAL) > first.replace(day=days):
-                continue
+        center = start + timedelta(days=DAY_INTERVAL)
+        while center - timedelta(days=DAY_INTERVAL) <= last:
             stamp = f"{center.isoformat()}T00:00:00"
             body = {
                 "isRescueFare": False, "adultCount": 1, "childCount": 0,
@@ -121,13 +127,12 @@ class Recipe:
                     {"departureStation": b, "arrivalStation": a, "date": stamp},
                 ],
             }  # fmt: skip
-            r = await self._call(ctx, "POST", "/asset/farechart", json=body, freshness="explore")
-            leg = "outboundFlights" if (a, b) == (o, d) else "returnFlights"
+            r = await self._call(ctx, "/asset/farechart", json=body, freshness="explore")
             for fare in parse_farechart(r.text, leg):
-                if fare.day.month == month.month and (
-                    fare.day not in best or fare.price < best[fare.day].price
-                ):
+                in_month = start <= fare.day <= last
+                if in_month and (fare.day not in best or fare.price < best[fare.day].price):
                     best[fare.day] = fare
+            center += timedelta(days=WINDOW)
         return [best[day] for day in sorted(best)]
 
     def booking_url(self, o: str, d: str, day: date) -> str | None:

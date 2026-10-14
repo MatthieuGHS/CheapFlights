@@ -14,7 +14,8 @@ http:
   rate_limited_backoff_s: 10   # à ajuster
   blocked_backoff_s: 3600      # à ajuster
   block_markers: [Access Denied, Request unsuccessful, _Incapsula_Resource, Pardon Our Interruption]  # à ajuster
-  captcha_markers: [captcha, challenge-platform, cf-turnstile, px-captcha]  # à ajuster
+  # signatures de murs, jamais le mot nu « captcha » : un site normal cite reCAPTCHA dans ses mentions
+  captcha_markers: [captcha-delivery, challenge-platform, cf-turnstile, px-captcha, hcaptcha.com/1/api]  # à ajuster
   impersonate: chrome
   browser_headless: true
   browser_dir: data/browser
@@ -36,7 +37,13 @@ llm:
 
 search:
   bound_slack: 0.8           # borne basse = prix calendrier × 0.8 (le calendrier peut surestimer)
+  request_budget: 400        # requêtes de scraping max par recherche (Explore + Verify), à ajuster
+  candidate_factor: 3        # le Verify peut invalider des candidats : on en garde 3 × top_k
+  sources: [wizzair, ryanair]  # Wizz d'abord : un appel farechart couvre 19 jours et 2 sens
+  penalties:
+    airport_night_eur: 15    # escale de nuit en aéroport, à ajuster
   defaults:                  # preset « N'importe quand »
+    home: VNO
     origins: [VNO, KUN, RIX]
     start_offset_days: 1
     window_days: 56          # 8 semaines

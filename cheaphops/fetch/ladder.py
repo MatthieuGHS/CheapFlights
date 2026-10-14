@@ -6,6 +6,7 @@ from cheaphops.core.config import HttpConfig
 from cheaphops.fetch.types import FetchResult
 
 RUNGS = (1, 2, 3, 4)
+WALL_MAX = 100_000  # taille au-delà de laquelle une page 2xx n'est pas un mur anti-bot
 
 
 class Outcome(StrEnum):
@@ -21,7 +22,10 @@ def classify(r: FetchResult, cfg: HttpConfig, source_markers: list[str]) -> Outc
     `409 Availability declined` de Ryanair."""
     ok = 200 <= r.status < 300
     is_json = "json" in (r.header("content-type") or "")
-    body = "" if ok and is_json else r.text[:50_000].lower()  # données servies : jamais un mur
+    # Une réponse 2xx en JSON, ou une vraie page (au-delà de WALL_MAX caractères), est servie :
+    # un mur anti-bot est une petite page. On lit alors tout le corps, pas un préfixe.
+    served = ok and (is_json or len(r.text) > WALL_MAX)
+    body = "" if served else r.text.lower()
     if any(m.lower() in body for m in cfg.captcha_markers):
         return Outcome.CAPTCHA
     # avant le 429 : certains anti-bots (Kasada) répondent 429 avec une page de défi

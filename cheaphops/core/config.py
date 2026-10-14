@@ -56,9 +56,17 @@ class LlmConfig(Model):
     caps: LlmCaps
 
 
+class Penalties(Model):
+    airport_night_eur: Price  # escale qui couvre la nuit (01:00-05:00 locales)
+
+
 class SearchConfig(Model):
     defaults: SearchDefaults
     bound_slack: Annotated[float, Field(gt=0, le=1)]
+    request_budget: Annotated[int, Field(ge=0)]  # requêtes de scraping max par recherche
+    candidate_factor: Annotated[int, Field(ge=1)]  # candidats gardés = top_k * facteur
+    sources: list[str]  # recettes interrogées, dans l'ordre de priorité du budget
+    penalties: Penalties
     presets: dict[str, SearchDefaults]
 
     @model_validator(mode="before")

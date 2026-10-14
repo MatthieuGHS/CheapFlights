@@ -52,6 +52,7 @@ class FetchResult:
     text: str
     rung: int
     from_cache: bool = False
+    browser_requests: int = 0  # ressources chargées par le navigateur lui-même (rungs 3-4)
 
     def header(self, name: str) -> str | None:
         return _header(self.headers, name)
@@ -69,7 +70,3 @@ class Transport(Protocol):
 
     async def send(self, req: HttpRequest) -> FetchResult: ...
     async def aclose(self) -> None: ...
-
-    def take_browser_requests(self) -> int:
-        """Requêtes lancées par le navigateur lui-même depuis le dernier appel (0 hors 3-4)."""
-        ...

@@ -95,6 +95,7 @@ class CtxHttp:
         self._now, self._sleep = now, sleep
         self._vary = [h.lower() for h in config.vary_headers]
         self._ttl = {"explore": config.explore_ttl_s, "verify": config.verify_ttl_s, "none": 0}
+        self.sent = 0  # requêtes de scraping réellement envoyées (cache exclu), pour le budget
 
     async def __aenter__(self) -> "CtxHttp":
         return self
@@ -149,8 +150,7 @@ class CtxHttp:
                 self._record(rung, None if rung_ok else f"{outcome} HTTP {result.status}", latency)
             if outcome is Outcome.OK:
                 self._set_blocked(None)
-                if ttl:
-                    self._store(key, result)
+                self._store(key, result)  # « none » : ne pas lire le cache, mais toujours l'écrire
                 return result
             if outcome is Outcome.CAPTCHA or (outcome is Outcome.BLOCKED and rung == RUNGS[-1]):
                 self._set_blocked(f"{outcome} at rung {rung}")
@@ -171,13 +171,14 @@ class CtxHttp:
         for _ in range(MAX_REDIRECTS + 1):
             await self._throttle.wait(req.url, self._manifest.rate_limit)
             start = time.monotonic()
+            self.sent += 1
             try:
                 result = await transport.send(req)
             except TransportError as e:
                 self._record(rung, str(e)[:200], latency + time.monotonic() - start)
                 raise
             latency += time.monotonic() - start
-            self._record_browser(rung, transport.take_browser_requests())
+            self._record_browser(rung, result.browser_requests)
             location = result.header("location")
             if transport.follows_redirects or not (300 <= result.status < 400 and location):
                 self._check_hop(rung, result.url, latency)

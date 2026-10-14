@@ -9,7 +9,9 @@ Scrapling `Fetcher` n'est pas un rung : il repose sur curl_cffi, comme le rung 2
 """
 
 import asyncio
+import dataclasses
 from typing import Any
+from urllib.parse import unquote
 
 import curl_cffi
 import httpx
@@ -41,9 +43,6 @@ class HttpxTransport:
     async def aclose(self) -> None:
         await self._client.aclose()
 
-    def take_browser_requests(self) -> int:
-        return 0
-
 
 class CurlTransport:
     follows_redirects = False
@@ -73,9 +72,6 @@ class CurlTransport:
     async def aclose(self) -> None:
         await self._session.close()
 
-    def take_browser_requests(self) -> int:
-        return 0
-
 
 class StealthCookieTransport:
     """Rung 3 : une visite de `home_url` par le navigateur furtif fournit les cookies, réutilisés
@@ -93,7 +89,9 @@ class StealthCookieTransport:
         async with self._lock:
             if self._curl is None:
                 self._curl = await self._bootstrap()
-        return await self._curl.send(req)
+        result = await self._curl.send(req)
+        loaded, self._browser_requests = self._browser_requests, 0  # page d'amorçage, une fois
+        return dataclasses.replace(result, browser_requests=loaded)
 
     async def _bootstrap(self) -> CurlTransport:
         from scrapling.fetchers import StealthyFetcher  # import lourd : seulement si le rung sert
@@ -120,16 +118,8 @@ class StealthCookieTransport:
     def _count(self, _: Any) -> None:
         self._browser_requests += 1
 
-    def take_browser_requests(self) -> int:
-        n, self._browser_requests = self._browser_requests, 0
-        return n
 
-
-_FETCH_JS = """async ([url, method, headers, body, cookieHeaders]) => {
-  const jar = Object.fromEntries(document.cookie.split("; ").map(c => {
-    const i = c.indexOf("="); return [c.slice(0, i), decodeURIComponent(c.slice(i + 1))];
-  }));
-  for (const [header, cookie] of cookieHeaders) if (jar[cookie]) headers[header] = jar[cookie];
+_FETCH_JS = """async ([url, method, headers, body]) => {
   const r = await fetch(url, {method, headers, body, credentials: "include"});
   return {status: r.status, url: r.url, headers: [...r.headers.entries()], text: await r.text()};
 }"""
@@ -147,23 +137,34 @@ class BrowserTransport:
         self._ctx: BrowserContext | None = None
         self._page: Page | None = None
         self._lock = asyncio.Lock()
-        # toutes les requêtes de la page moins nos envois ; les préflights CORS de nos POST y
-        # restent comptés (une unité par appel, chiffre d'information seulement)
+        # requêtes de la page elle-même (chargement, XHR du site), hors URL que nous demandons ;
+        # les préflights CORS (OPTIONS) de nos POST visent notre URL et ne sont donc pas comptés
         self._browser_requests = 0
+        self._target = ""
 
     async def send(self, req: HttpRequest) -> FetchResult:
         try:
             async with self._lock:
                 page = self._page or await self._open()
             body = req.body.decode() if req.body is not None else None
-            cookie_headers = list(self._manifest.cookie_headers.items())
-            args = [req.url, req.method, dict(req.headers), body, cookie_headers]
-            out = await page.evaluate(_FETCH_JS, args)
-            self._browser_requests -= 1
+            sent = dict(req.headers) | await self._cookie_headers(req.url)
+            self._target = req.url
+            out = await page.evaluate(_FETCH_JS, [req.url, req.method, sent, body])
         except Exception as e:  # erreurs Playwright : navigateur, réseau, JS
             raise TransportError(f"browser: {e}") from e
+        loaded, self._browser_requests = self._browser_requests, 0
         headers = tuple((k, v) for k, v in out["headers"])
-        return FetchResult(out["url"], out["status"], headers, out["text"], 4)
+        return FetchResult(
+            out["url"], out["status"], headers, out["text"], 4, browser_requests=loaded
+        )
+
+    async def _cookie_headers(self, url: str) -> dict[str, str]:
+        """En-têtes recopiés de cookies (CSRF double-submit), lus dans le contexte du navigateur."""
+        if not self._manifest.cookie_headers or self._ctx is None:
+            return {}
+        jar = {c["name"]: unquote(c["value"]) for c in await self._ctx.cookies(url)}
+        wanted = self._manifest.cookie_headers.items()
+        return {header: jar[cookie] for header, cookie in wanted if cookie in jar}
 
     async def _open(self) -> Page:
         """Après un échec de chargement, seul `goto` est rejoué : relancer le navigateur sur un
@@ -175,17 +176,14 @@ class BrowserTransport:
         )
         page = await self._ctx.new_page()
 
-        def count(_: Any) -> None:
-            self._browser_requests += 1
+        def count(request: Any) -> None:
+            if request.url != self._target:
+                self._browser_requests += 1
 
         page.on("request", count)
         await page.goto(self._manifest.home_url, timeout=self._cfg.timeout_s * 1000)
         self._page = page  # seulement une fois la page chargée, avec les cookies du site
         return page
-
-    def take_browser_requests(self) -> int:
-        n, self._browser_requests = max(self._browser_requests, 0), 0
-        return n
 
     async def aclose(self) -> None:
         if self._ctx is not None:

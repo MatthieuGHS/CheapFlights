@@ -59,13 +59,11 @@ class Scripted:
         if isinstance(out, Exception):
             raise out
         status, headers, text = out
-        return FetchResult(req.url, status, headers, text, self.rung)
+        loaded = 3 if self.rung == 4 else 0  # rung 4 : la page charge aussi ses ressources
+        return FetchResult(req.url, status, headers, text, self.rung, browser_requests=loaded)
 
     async def aclose(self) -> None:
         pass
-
-    def take_browser_requests(self) -> int:
-        return 3 if self.rung == 4 else 0  # rung 4 : la page charge aussi ses propres ressources
 
 
 def ok(req: HttpRequest) -> Reply:
@@ -179,11 +177,14 @@ async def test_cache_hit_until_ttl_expires(conn: sqlite3.Connection, clock: Fake
     assert len(ts[0].sent) == 2
 
 
-async def test_freshness_none_never_caches(conn: sqlite3.Connection, clock: FakeClock) -> None:
+async def test_freshness_none_skips_cache_read_but_writes(
+    conn: sqlite3.Connection, clock: FakeClock
+) -> None:
     http, ts = make(conn, clock, ok)
     for _ in range(2):
         await http.get("https://api.ryanair.com/f", freshness="none")
     assert len(ts[0].sent) == 2
+    assert (await http.get("https://api.ryanair.com/f", freshness="explore")).from_cache
 
 
 async def test_cache_key_includes_params_body_and_vary_headers(
@@ -283,6 +284,14 @@ async def test_antibot_challenge_served_as_429_is_blocked_not_rate_limited(
     http, ts = make(conn, clock, lambda req: challenge, ok, m=m)
     assert (await http.get("https://www.ryanair.com/x", freshness="none")).rung == 2
     assert len(ts[0].sent) == 1  # pas d'attente ni de nouvel essai sur le même rung
+
+
+async def test_real_page_citing_recaptcha_is_not_a_wall(
+    conn: sqlite3.Connection, clock: FakeClock
+) -> None:
+    page = "<html>" + "x" * 120_000 + "<a class='recaptcha-terms-privacy'>"  # comme l'accueil Wizz
+    http, _ = make(conn, clock, lambda req: (200, (("content-type", "text/html"),), page))
+    assert (await http.get("https://www.ryanair.com/", freshness="none")).status == 200
 
 
 async def test_json_mentioning_captcha_is_ok(conn: sqlite3.Connection, clock: FakeClock) -> None:

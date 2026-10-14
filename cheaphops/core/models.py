@@ -76,6 +76,7 @@ class Deadline(Model):
 class SearchOptions(Model):
     """Paramètres §4.2 hors fenêtre de dates. Aucun défaut ici : ils vivent dans config.yaml."""
 
+    home: Iata  # là où j'habite : départ et retour de chaque voyage, trajets sol compris
     origins: Annotated[list[Iata], Field(min_length=1)]
     max_nights: Annotated[int, Field(ge=0)]
     min_on_site_hours: Hours
@@ -149,7 +150,7 @@ Capability = Literal["routes", "calendar", "day_flights", "booking_url"]
 class Manifest(Model):
     source: str
     version: Annotated[int, Field(ge=1)]
-    capabilities: Annotated[set[Capability], Field(min_length=1)]
+    capabilities: set[Capability]  # vide pour une source de données hors vols (taux BCE)
     allowed_domains: Annotated[list[Domain], Field(min_length=1)]
     home_url: Annotated[str, StringConstraints(pattern=r"^https://")]  # amorce des rungs 3-4
     block_markers: list[str]  # refus anti-bot propres à la source, en plus de ceux de la config

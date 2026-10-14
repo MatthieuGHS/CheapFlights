@@ -31,13 +31,11 @@ class FixtureTransport:
         path = self.route(req)
         if path is None:
             return FetchResult(req.url, 404, JSON, "{}", 1)
-        return FetchResult(req.url, 200, JSON, path.read_text(), 1)
+        kind = "text/html" if path.suffix == ".html" else "application/json"
+        return FetchResult(req.url, 200, (("content-type", kind),), path.read_text(), 1)
 
     async def aclose(self) -> None:
         pass
-
-    def take_browser_requests(self) -> int:
-        return 0
 
 
 async def _no_sleep(_: float) -> None:

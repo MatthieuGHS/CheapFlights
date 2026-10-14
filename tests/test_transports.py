@@ -99,7 +99,7 @@ async def test_browser_rung_fetches_from_the_page(base: str, tmp_path: Path) -> 
     assert (got.status, got.rung, got.json()) == (200, 4, {"path": "/x?d=BGY"})
     assert posted.json() == {"a": 1}
     assert echoed.json()["x-csrf"] == "abc"  # recopié du cookie, comme le jeton CSRF de Wizz
-    assert t.take_browser_requests() == 1 and t.take_browser_requests() == 0  # la page /home
+    assert (got.browser_requests, posted.browser_requests) == (1, 0)  # la page /home, une fois
 
 
 async def test_browser_rung_retries_page_load_without_relaunching(
