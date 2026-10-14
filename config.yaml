@@ -9,7 +9,8 @@ lastminute:
   max_nights: 3
   top: 30                  # lignes affichées par tableau
   optional_origins: [WAW, GDN, TLL]   # ajoutées avec --origins ; bus depuis Vilnius dans ground.yaml
-  return_below_eur: 30     # retour cherché (1 requête Ryanair) si l'aller coûte moins que ça
+  oneways_max: 300         # allers simples gardés (vue UI avec filtre de prix)
+  alternatives: 10         # dates proposées par destination pour « toutes les dates »
   wizz_routes: 30          # routes Wizz dont on lit les prix par jour (farechart, 1 POST chacune)
   pause_s: [0.3, 0.9]      # pause aléatoire entre deux requêtes d'une même source
   request_budget: 150      # requêtes réseau max par recherche, toutes sources

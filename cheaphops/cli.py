@@ -17,7 +17,7 @@ def _fare(f: Fare) -> str:
     return f"{line} [{f.source}]"
 
 
-def render(r: Result, top: int = 10) -> str:
+def render(r: Result, top: int = 10, all_dates: bool = False) -> str:
     lines = [f"{r.seconds:.0f} s, {r.requests} requêtes"]
     for name, s in r.sources.items():
         state = f"ERREUR {s.error}" if s.error else f"ok{f' ({s.mode})' if s.mode else ''}"
@@ -25,8 +25,15 @@ def render(r: Result, top: int = 10) -> str:
             f"  {name}: {state}, {s.fares} tarifs ({s.in_window} dans la fenêtre), "
             f"{s.requests} req, {s.seconds:.0f} s"
         )
-    lines.append(f"Top {top} aller-retours :")
-    lines += [_trip(t) for t in r.roundtrips[:top]] or ["  (aucun)"]
+    lines.append(f"Top {top} aller-retours (une ligne par destination) :")
+    for t in r.roundtrips[:top] or []:
+        lines.append(_trip(t))
+        if all_dates:
+            lines += [
+                f"      {_trip(x).strip()}" for x in r.alternatives.get(t.out.destination, [])[1:]
+            ]
+    if not r.roundtrips:
+        lines.append("  (aucun)")
     lines.append(f"Top {top} allers simples :")
     lines += [f"  {_fare(f)}" for f in r.oneways[:top]]
     if r.deals:
@@ -40,6 +47,8 @@ def render(r: Result, top: int = 10) -> str:
 
 
 def _trip(t: RoundTrip) -> str:
+    if t.bundled:
+        return f"  {t.total} € / {t.nights} n : {_fare(t.out)} (aller-retour, {t.back.day:%d/%m})"
     return f"  {t.total} € / {t.nights} n : {_fare(t.out)} | {_fare(t.back)}"
 
 
@@ -50,6 +59,9 @@ def main(argv: list[str] | None = None) -> int:
     s.add_argument("--days", type=int, help="départs de J+0 à J+N, 60 max (défaut : config)")
     s.add_argument(
         "--google", action="store_true", help="active Google Flights (hubs échantillonnés)"
+    )
+    s.add_argument(
+        "--all-dates", action="store_true", help="toutes les dates de chaque destination"
     )
     s.add_argument("--origins", help="ex. VNO,KUN,RIX,WAW (optionnels : WAW, GDN, TLL)")
     srv = sub.add_parser("serve", help="API + interface web sur http://127.0.0.1:PORT")
@@ -78,11 +90,8 @@ def main(argv: list[str] | None = None) -> int:
     lm = lm.model_copy(update=update)
     if args.google:
         lm = lm.model_copy(update={"google": lm.google.model_copy(update={"enabled": True})})
-    print(
-        render(
-            asyncio.run(run(lm, load_ground(), date.today(), lambda e: print(e, file=sys.stderr)))
-        )
-    )
+    result = asyncio.run(run(lm, load_ground(), date.today(), lambda e: print(e, file=sys.stderr)))
+    print(render(result, all_dates=args.all_dates))
     return 0
 
 

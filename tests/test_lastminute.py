@@ -7,7 +7,15 @@ from types import SimpleNamespace
 from cheaphops.core.config import Ground, load_config
 from cheaphops.lastminute import generic, sources
 from cheaphops.lastminute import run as run_mod
-from cheaphops.lastminute.fares import Fare, cheapest_oneways, roundtrips
+from cheaphops.lastminute.fares import (
+    Deal,
+    Fare,
+    best_per_destination,
+    bundled_roundtrips,
+    by_destination,
+    cheapest_oneways,
+    roundtrips,
+)
 from cheaphops.lastminute.fx import Fx
 
 FX = Fx({"PLN": Decimal("4.25")})
@@ -34,7 +42,7 @@ def test_roundtrip_mixes_airlines_and_open_jaw_within_nights() -> None:
     ok = fare("BGY", "RIX", "2026-10-23", "15", src="wizzair")  # autre compagnie, autre maison
     late = fare("BGY", "VNO", "2026-10-24", "5")  # 4 nuits
     wrong_dest = fare("MXP", "VNO", "2026-10-22", "5")
-    got = roundtrips([out], [late, wrong_dest, ok], 3, 10, {})
+    got = roundtrips([out], [late, wrong_dest, ok], 3, {})
     assert [(t.back, t.total, t.nights) for t in got] == [(ok, Decimal("35"), 3)]
 
 
@@ -42,13 +50,13 @@ def test_same_day_return_needs_a_gap() -> None:
     out = fare("VNO", "BGY", "2026-10-20", "20", hour=6)
     soon = fare("BGY", "VNO", "2026-10-20", "5", hour=9)
     later = fare("BGY", "VNO", "2026-10-20", "5", hour=18)
-    assert [t.back for t in roundtrips([out], [soon, later], 3, 10, {})] == [later]
+    assert [t.back for t in roundtrips([out], [soon, later], 3, {})] == [later]
 
 
 def test_roundtrips_sorted_by_total() -> None:
     o1, o2 = fare("VNO", "BGY", "2026-10-20", "50"), fare("KUN", "BGY", "2026-10-20", "10")
     back = fare("BGY", "VNO", "2026-10-21", "10")
-    assert [t.total for t in roundtrips([o1, o2], [back], 3, 10, {})] == [20, 60]
+    assert [t.total for t in roundtrips([o1, o2], [back], 3, {})] == [20, 60]
 
 
 def test_parse_wizz_keeps_regular_eur_price_and_ignores_garbage() -> None:
@@ -94,7 +102,7 @@ def test_ground_cost_is_added_and_reorders() -> None:
     b = fare("KUN", "BGY", "2026-10-20", "12")  # 12 + 10 bus > 20
     assert cheapest_oneways([a, b], 2, bus) == [a, b]
     back = fare("BGY", "RIX", "2026-10-22", "10")
-    (t,) = roundtrips([b], [back], 3, 5, bus)
+    (t,) = roundtrips([b], [back], 3, bus)
     assert (t.ground, t.total) == (Decimal(25), Decimal(47))
 
 
@@ -175,7 +183,41 @@ def test_fx_cache_is_reused_within_24h(tmp_path) -> None:  # type: ignore[no-unt
     assert fx_mod.parse_ecb("<Cube currency='USD' rate='1.1'/>") == {"USD": Decimal("1.1")}
 
 
-def test_run_threshold_budget_and_dead_source(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+def test_best_per_destination_and_all_dates() -> None:
+    outs = [
+        fare("VNO", "BGY", "2026-10-20", "20"),
+        fare("VNO", "BGY", "2026-10-22", "30"),
+        fare("VNO", "ATH", "2026-10-21", "25"),
+    ]
+    backs = [fare("BGY", "VNO", "2026-10-23", "10"), fare("ATH", "VNO", "2026-10-23", "9")]
+    trips = roundtrips(outs, backs, 3, {})
+    assert [(t.out.destination, t.total) for t in best_per_destination(trips)] == [
+        ("BGY", Decimal(30)),
+        ("ATH", Decimal(34)),
+    ]
+    assert [t.total for t in by_destination(trips, 5)["BGY"]] == [30, 40]
+
+
+def test_dated_deal_becomes_a_bundled_roundtrip_in_the_same_ranking() -> None:
+    deal = Deal(
+        "kayak-explore", "VNO -> BGY", "VNO", "BGY", Decimal("33.05"), "https://k/1",
+        None, date(2026, 11, 6), date(2026, 11, 9), "Ryanair",
+    )  # fmt: skip
+    far = Deal("k", "VNO -> X", "VNO", "XXX", Decimal(10), "u", None, date(2026, 11, 6),
+               date(2026, 11, 20), None)  # fmt: skip
+    twin = Deal(
+        "kayak-explore", "VNO -> MIL", "VNO", "MIL", Decimal("33.05"), "https://k/2",
+        None, date(2026, 11, 6), date(2026, 11, 9), "Ryanair",
+    )  # fmt: skip
+    trips = bundled_roundtrips([deal, twin, far], {"VNO"}, 3, {"VNO": Decimal(0)})
+    assert [(t.total, t.nights, t.bundled) for t in trips] == [(Decimal("33.05"), 3, True)]
+    pair = roundtrips([fare("VNO", "ATH", "2026-11-06", "20")],
+                      [fare("ATH", "VNO", "2026-11-08", "15")], 3, {})  # fmt: skip
+    ranked = best_per_destination([*pair, *trips])
+    assert [t.out.destination for t in ranked] == ["BGY", "ATH"]  # 33,05 < 35
+
+
+def test_run_pairs_all_sources_and_only_fetches_missing_returns(monkeypatch) -> None:  # type: ignore[no-untyped-def]
     cfg = load_config().lastminute.model_copy(update={"request_budget": 40, "pause_s": (0, 0)})
     queried: list[str] = []
 
@@ -187,23 +229,27 @@ def test_run_threshold_budget_and_dead_source(monkeypatch) -> None:  # type: ign
                 fare(airport, "ATH", "2026-10-15", "45"),
             ]
         queried.append(airport)
-        return [fare("BGY", "VNO", "2026-10-17", "12")]
+        return [fare("ATH", "VNO", "2026-10-17", "12")]
 
-    def dead_wizz(*args):  # type: ignore[no-untyped-def]
-        raise RuntimeError("Kasada")
+    def fake_wizz(*args):  # type: ignore[no-untyped-def]
+        # le retour BGY->VNO vient de Wizz : BGY est couverte, seule ATH reste à chercher
+        return [fare("BGY", "VNO", "2026-10-17", "9", src="wizzair")], 3
 
     monkeypatch.setattr(sources, "ryanair", fake_ry)
-    monkeypatch.setattr(sources, "wizz", dead_wizz)
+    monkeypatch.setattr(sources, "wizz", fake_wizz)
     monkeypatch.setattr(sources, "google", lambda *a: ([], 0))
     monkeypatch.setattr(generic, "load_sources", lambda: [])
     monkeypatch.setattr(run_mod, "Ryanair", lambda currency: SimpleNamespace(num_queries=0))
     ground = Ground.model_validate({"home": "VNO", "buses": {}})
 
     r = asyncio.run(run_mod.run(cfg, ground, date(2026, 10, 14), fx=FX))
-    assert queried == ["BGY"]  # ATH à 45 € dépasse le seuil de 30 €
-    assert r.sources["wizzair"].error and not r.sources["ryanair"].error
+    assert queried == ["ATH"]
     assert r.requests <= 40
-    assert r.roundtrips[0].total == Decimal("32")
+    assert [(t.out.destination, t.total) for t in r.roundtrips] == [
+        ("BGY", Decimal(29)),
+        ("ATH", Decimal(57)),
+    ]
+    assert set(r.alternatives) == {"BGY", "ATH"}
 
 
 def test_teztour_fixture_yields_dated_oneway_charters() -> None:

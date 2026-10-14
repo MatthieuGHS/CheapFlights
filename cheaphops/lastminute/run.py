@@ -12,7 +12,6 @@ import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import date, timedelta
-from decimal import Decimal
 from typing import Any
 
 from ryanair import Ryanair
@@ -23,6 +22,9 @@ from cheaphops.lastminute.fares import (
     Deal,
     Fare,
     RoundTrip,
+    best_per_destination,
+    bundled_roundtrips,
+    by_destination,
     cheapest_oneways,
     dedupe,
     roundtrips,
@@ -45,8 +47,9 @@ class SourceReport:
 @dataclass
 class Result:
     oneways: list[Fare]
-    roundtrips: list[RoundTrip]
-    deals: list[Deal]
+    roundtrips: list[RoundTrip]  # la meilleure combinaison par destination
+    alternatives: dict[str, list[RoundTrip]]  # toutes les dates des destinations affichées
+    deals: list[Deal]  # bons plans sans date
     requests: int
     seconds: float
     sources: dict[str, SourceReport] = field(default_factory=dict)
@@ -76,6 +79,7 @@ async def run(
     d0, d1 = today, today + timedelta(days=cfg.days)
     origins = set(cfg.origins)
     bus = {o: ground.cost(o) for o in origins}
+    ground_by_airport = bus
     reports: dict[str, SourceReport] = {}
     modes: dict[str, str] = {}
     rates = fx if fx is not None else await asyncio.to_thread(load_fx)
@@ -165,13 +169,19 @@ async def run(
             f.source if f.source in reports else f"web:{f.source}", SourceReport()
         ).in_window += 1
 
-    # Étape 2 : un retour Ryanair par destination dont l'aller est sous le seuil
-    cheap: dict[str, Fare] = {}
+    # Étape 2 : les retours manquants. Les allers simples de toutes les sources se combinent déjà
+    # entre eux ; il reste à chercher (Ryanair, 1 requête chacune) le retour des destinations sans
+    # aucun vol vers les origines dans le pool, les moins chères d'abord, dans ce que le budget
+    # permet. Wizz donne ses retours dans le farechart : ses destinations sont déjà couvertes.
+    covered = {b.origin for b in backs}
+    cheapest: dict[str, Fare] = {}
     for f in sorted(outs, key=lambda f: f.price):
-        if f.price <= Decimal(str(cfg.return_below_eur)) and f.destination not in origins:
-            cheap.setdefault(f.destination, f)
+        if f.destination not in origins and f.destination not in covered:
+            cheapest.setdefault(f.destination, f)
     used = sum(r.requests for r in reports.values())
-    picks = list(cheap.values())[: max(cfg.request_budget - used, 0)]
+    picks = [f for f in cheapest.values() if f.source != "wizzair"][
+        : max(cfg.request_budget - used, 0)
+    ]
     if picks:
         before = api.num_queries
 
@@ -188,11 +198,22 @@ async def run(
         backs += await call("ryanair", ry_back)
 
     total = sum(r.requests for r in reports.values())
-    unique = {(d.origin, d.destination, d.price): d for d in deals}  # un même bon plan, 5 flux
-    best_deals = sorted(unique.values(), key=lambda d: d.price)[: cfg.top]
+    dated = [d for d in deals if d.day is not None and d.back is not None]
+    undated = {(d.origin, d.destination, d.price): d for d in deals if d not in dated}
+    best_deals = sorted(undated.values(), key=lambda d: d.price)[: cfg.top]
+    trips = roundtrips(outs, backs, cfg.max_nights, bus)
+    trips += bundled_roundtrips(dated, origins, cfg.max_nights, ground_by_airport)
+    ranked = best_per_destination(trips)[: cfg.top]
+    shown = {t.out.destination for t in ranked}
+    alternatives = {
+        dest: group
+        for dest, group in by_destination(trips, cfg.alternatives).items()
+        if dest in shown
+    }
     result = Result(
-        cheapest_oneways(outs, cfg.top, bus),
-        roundtrips(outs, backs, cfg.max_nights, cfg.top, bus),
+        cheapest_oneways(outs, cfg.oneways_max, bus),
+        ranked,
+        alternatives,
         best_deals,
         total,
         time.monotonic() - start,

@@ -66,7 +66,7 @@ Corendon, Jet2 — leurs sièges se vendent surtout via les voyagistes (lot A).
 | azair.eu | agrégateur « n'importe où » | **source** (`azair.yaml`) | fetcher | recherche flexible par URL, 1 requête par origine, ~25 résultats chacune : vols aller et retour datés, compagnie et lien de réservation, combinaisons multi-compagnies |
 | kayak.com/explore | agrégateur « n'importe où » | **source** (`kayak-explore.yaml`) | dynamic (XHR `explorePageDestinations`) | 161 destinations par origine en 1 chargement ; aller-retour avec dates, compagnie, prix USD converti ; fenêtre filtrée côté recherche |
 | momondo.com/explore | agrégateur | accessible, doublon | fetcher + dynamic | même moteur et même API que Kayak, non ajouté |
-| kiwi.com (`/search/results/…/anywhere`) | agrégateur | accessible, sans prix | fetcher, dynamic | page chargée (920 Ko) mais aucun prix dans le DOM ni dans les XHR capturés en 45 s : résultats derrière un GraphQL non déclenché |
+| kiwi.com (`/search/results/…/anywhere`) | agrégateur | **abandonné** | dynamic | 2e tentative (clic cookies + « Search », attente 25 s, XHR `graphql\|umbrella\|search`) : seule la requête `RecentSearchesQuery` part, aucune recherche GraphQL, aucun prix dans le DOM ; page d'atterrissage sans résultats. Définitif. |
 | skyscanner.net | agrégateur | bloqué | fetcher, dynamic | `/flights-from/vno/` répond sans prix exploitable (9 occurrences) ; page « everywhere » : délai dépassé (100 s) sans réponse, anti-bot probable |
 | aviasales.com | agrégateur | non trouvé | fetcher | URL `/routes/vno` : 404 ; pas de recherche « partout » localisée |
 | trip.com | agrégateur | non trouvé | dynamic | accueil seul accessible ; URL « vers n'importe où » : 404 |

@@ -23,7 +23,10 @@ class LastMinute(Model):
     max_nights: Annotated[int, Field(ge=0)]
     top: Annotated[int, Field(ge=1)]
     optional_origins: list[Iata]  # villes voisines, avec bus depuis le domicile (ground.yaml)
-    return_below_eur: Annotated[float, Field(ge=0)]  # retours cherchés si l'aller coûte moins
+    oneways_max: Annotated[int, Field(ge=1)]  # allers simples gardés pour la vue « allers simples »
+    alternatives: Annotated[
+        int, Field(ge=1)
+    ]  # dates proposées par destination (option « tout voir »)
     wizz_routes: Annotated[int, Field(ge=0)]  # routes Wizz dont on lit le farechart
     pause_s: tuple[float, float]  # pause aléatoire entre deux requêtes d'une même source
     request_budget: Annotated[int, Field(ge=1)]
