@@ -50,6 +50,7 @@ class _Source:
     loaded: LoadedRecipe
     ctx: Ctx
     blocked: bool = False
+    over_budget: bool = False
 
     @property
     def name(self) -> str:
@@ -123,7 +124,9 @@ async def _guarded(src: _Source, emit: Emit, what: str, call: Any) -> Any:
     try:
         return await call
     except BudgetExhausted:
-        emit({"type": "budget", "source": src.name, "what": what})
+        if not src.over_budget:  # un seul événement par source : la suite vient du cache ou rien
+            emit({"type": "budget", "source": src.name, "what": what})
+        src.over_budget = True
     except SourceBlocked as e:
         src.blocked = True
         emit({"type": "error", "source": src.name, "what": what, "error": str(e), "blocked": True})

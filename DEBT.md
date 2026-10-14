@@ -52,5 +52,9 @@ Rate limit par domaine enregistrable (fait avant toute requête réelle), fraîc
 
 ## Reporté à la phase 2
 
+- 1c : `Segment.fetched_at` vaut l'heure du Verify, même quand la réponse vient du cache.
+  L'âge des prix affiché par l'UI doit venir de `http_cache.fetched_at` (le recipe ne le voit
+  pas aujourd'hui) : exposer l'âge dans `FetchResult` ou le relire depuis le cache.
+
 - F10 : un preset remplace `return_deadline` en entier (fusion superficielle), alors que
   `config.local.yaml` fusionne en profondeur. À fixer par un test en phase 2.

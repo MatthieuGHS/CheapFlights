@@ -6,7 +6,7 @@ import sys
 from datetime import date, timedelta
 from typing import Any
 
-from cheaphops.core.config import load_config, load_ground
+from cheaphops.core.config import Config, load_config, load_ground
 from cheaphops.core.db import connect
 from cheaphops.core.log import setup_logging
 from cheaphops.core.models import SearchParams
@@ -14,8 +14,7 @@ from cheaphops.search.engine import Event, run_search
 from cheaphops.search.model import Segment, Trip
 
 
-def build_params(args: argparse.Namespace, today: date) -> SearchParams:
-    config = load_config()
+def build_params(args: argparse.Namespace, config: Config, today: date) -> SearchParams:
     defaults = config.search.presets[args.preset] if args.preset else config.search.defaults
     params = defaults.params(today)
     update: dict[str, Any] = {}
@@ -77,7 +76,7 @@ def main(argv: list[str] | None = None) -> int:
         config = config.model_copy(update={"search": search})
     setup_logging(config.log_level)
     today = date.today()
-    params = build_params(args, today)
+    params = build_params(args, config, today)
     result = asyncio.run(
         run_search(params, config, load_ground(), connect(config.db_path), today, progress)
     )
