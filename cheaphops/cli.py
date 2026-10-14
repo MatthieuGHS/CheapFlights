@@ -13,7 +13,8 @@ from cheaphops.lastminute.run import Result, run
 
 def _fare(f: Fare) -> str:
     fmt = "%a %d/%m" if f.source == "wizzair" else "%a %d/%m %H:%M"  # Wizz : prix au jour
-    return f"{f.origin}->{f.destination} {f.departure.strftime(fmt)} {f.airline} {f.price} €"
+    line = f"{f.origin}->{f.destination} {f.departure.strftime(fmt)} {f.airline} {f.price} €"
+    return f"{line} [{f.source}]"
 
 
 def render(r: Result, top: int = 10) -> str:
@@ -29,8 +30,12 @@ def render(r: Result, top: int = 10) -> str:
     lines.append(f"Top {top} allers simples :")
     lines += [f"  {_fare(f)}" for f in r.oneways[:top]]
     if r.deals:
-        lines.append("Bons plans (sans date précise) :")
-        lines += [f"  {d.price} € {d.origin}->{d.destination} {d.url}" for d in r.deals[:top]]
+        lines.append("Bons plans (aller-retour, dates si connues) :")
+        lines += [
+            f"  {d.price} € {d.origin}->{d.destination} {d.when or ''} {d.airline or ''} "
+            f"[{d.source}]"
+            for d in r.deals[:top]
+        ]
     return "\n".join(lines)
 
 

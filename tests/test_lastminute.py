@@ -288,3 +288,13 @@ def test_kayak_explore_json_gives_dated_round_trips_converted_to_eur() -> None:
     assert (d.day, d.back) == (date(2026, 11, 28), date(2026, 11, 30))
     assert d.url == "https://www.kayak.com/flights/VNO-BGY/"
     assert d.when == "2026-11-28 -> 2026-11-30"
+
+
+def test_dedupe_keeps_the_timed_version_of_the_same_flight() -> None:
+    from cheaphops.lastminute.fares import dedupe
+
+    day_only = fare("VNO", "TLL", "2026-11-06", "19.99", hour=0, src="wizzair")
+    timed = fare("VNO", "TLL", "2026-11-06", "19.99", hour=6, src="wizzair")
+    other = fare("VNO", "TLL", "2026-11-06", "24.99", hour=0, src="wizzair")
+    assert dedupe([day_only, timed, other]) == [timed, other]
+    assert dedupe([timed, day_only]) == [timed]

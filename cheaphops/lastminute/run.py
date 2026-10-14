@@ -19,7 +19,14 @@ from ryanair import Ryanair
 
 from cheaphops.core.config import Ground, LastMinute
 from cheaphops.lastminute import generic, sources
-from cheaphops.lastminute.fares import Deal, Fare, RoundTrip, cheapest_oneways, roundtrips
+from cheaphops.lastminute.fares import (
+    Deal,
+    Fare,
+    RoundTrip,
+    cheapest_oneways,
+    dedupe,
+    roundtrips,
+)
 from cheaphops.lastminute.fx import Fx, load_fx
 
 Emit = Callable[[dict[str, Any]], None]
@@ -130,6 +137,7 @@ async def run(
                     src, rates, (d0, d1, cfg.max_nights, cfg.origins)
                 )
                 web_fares.extend(fares)
+                reports[f"web:{src.name}"].fares += len(fares)
                 modes[src.name] = mode
                 return got, pages
 
@@ -149,7 +157,7 @@ async def run(
     )  # fmt: skip
     last = d1 + timedelta(days=cfg.max_nights)
     # VNO et KUN forment une zone MAC chez Wizz : un même vol sort des deux farecharts
-    pool = [f for f in dict.fromkeys((*ry, *wz, *gg, *web_fares)) if d0 <= f.day <= last]
+    pool = [f for f in dedupe([*ry, *wz, *gg, *web_fares]) if d0 <= f.day <= last]
     outs = [f for f in pool if f.origin in origins and f.day <= d1]
     backs = [f for f in pool if f.destination in origins]
     for f in outs:

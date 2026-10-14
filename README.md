@@ -16,8 +16,13 @@ Sources (`cheaphops/lastminute/sources.py`), réglages dans `config.yaml` (`last
 - **Wizz** : `SmartSearchCheapFlightsV2` via Scrapling `StealthyFetcher` headless (1 page + 1 POST
   par aéroport). Renvoie le moins cher par destination sur une période flexible : peu de tarifs
   tombent dans la fenêtre.
-- **Google Flights** : `fast-flights`. Pas de « n'importe où » (une requête = une origine, une
+- **Google Flights** (désactivé par défaut, `--google`) : `fast-flights`. Pas de « n'importe où » (une requête = une origine, une
   destination, une date) : échantillon de hubs configuré, hors Ryanair/Wizz.
+
+Sources YAML (`cheaphops/lastminute/web/*.yaml`, Scrapling : fetcher → stealthy → dynamic,
+sélecteurs adaptatifs, flux RSS ou interception de réponses JSON) : azair, kayak-explore, teztour,
+fly4free-com, secretflying. Voir `docs/COVERAGE.md` pour tous les sites explorés. Sonde d'un site :
+`uv run python -m cheaphops.lastminute.probe URL`.
 
 Étape 2 : les retours sont cherchés depuis les `return_candidates` destinations les moins chères
 (Ryanair, plus Wizz pour celles qu'il dessert). Les aller-retours sont donc limités à ces
