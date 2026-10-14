@@ -59,20 +59,24 @@ async def capture(
     # patchright : même API que Playwright, Chromium durci contre la détection (moteur du rung 3)
     async with stealth_playwright() if stealth else async_playwright() as pw:
         browser = await pw.chromium.launch(headless=not headed)
-        page = await browser.new_page(locale="en-GB")
-        await page.route("**/*", route)
-        page.on("request", count)
-        page.on("response", lambda r: tasks.append(asyncio.ensure_future(keep(r))))
+        # écoute au niveau du contexte : les sites qui ouvrent les résultats dans un nouvel onglet
+        context = await browser.new_context(locale="en-GB")
+        await context.route("**/*", route)
+        context.on("request", count)
+        context.on("response", lambda r: tasks.append(asyncio.ensure_future(keep(r))))
+        page = await context.new_page()
         doc = await page.goto(url, wait_until="networkidle", timeout=60_000)
         document = f"HTTP {doc.status if doc else '?'} {page.url}"  # mur anti-bot : statut, URL
         for label in clicks:  # scénario minimal : bandeau cookies, bouton « rechercher »…
             await page.get_by_text(label, exact=True).first.click(timeout=10_000)
             await page.wait_for_load_state("networkidle")
-        # headed : fermer la fenêtre termine la capture, sinon `--wait` secondes. Exception : le
-        # timeout n'a pas la même classe selon Playwright / patchright
-        with contextlib.suppress(Exception):
-            await page.wait_for_event("close", timeout=wait_s * 1000)
-        text = "" if page.is_closed() else await page.inner_text("body")
+        # headed : fermer tous les onglets termine la capture, sinon `--wait` secondes. Le texte
+        # du dernier onglet ouvert est relevé en continu : c'est la vérité terrain des prix.
+        text, deadline = "", asyncio.get_running_loop().time() + wait_s
+        while context.pages and asyncio.get_running_loop().time() < deadline:
+            with contextlib.suppress(Exception):  # onglet fermé pendant la lecture
+                text = await context.pages[-1].inner_text("body")
+            await asyncio.sleep(2)
         # une réponse illisible ne doit jamais faire perdre toute la capture (navigation manuelle)
         for err in await asyncio.gather(*tasks, return_exceptions=True):
             if isinstance(err, Exception):

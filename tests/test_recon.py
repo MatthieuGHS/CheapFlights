@@ -38,3 +38,37 @@ def test_url_template_and_skeleton() -> None:
 
 def test_visible_prices() -> None:
     assert visible_prices("from €19.99 or 25,00 EUR") == ["€19.99", "25,00 EUR"]
+
+
+def test_capture_follows_new_tabs_and_reads_page_text() -> None:
+    import asyncio
+    import threading
+    from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
+    from cheaphops.recon.__main__ import capture
+
+    class Site(BaseHTTPRequestHandler):
+        def do_GET(self) -> None:
+            api = self.path.startswith("/api")
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json" if api else "text/html")
+            self.end_headers()
+            if api:
+                self.wfile.write(b'{"to": "BGY", "price": 12}')
+            elif self.path == "/":  # les résultats s'ouvrent dans un nouvel onglet, comme Wizz
+                self.wfile.write(b"<script>window.open('/results')</script>")
+            else:
+                self.wfile.write(b"<p>EUR 12.00</p><script>fetch('/api')</script>")
+
+        def log_message(self, *args: object) -> None:
+            pass
+
+    server = ThreadingHTTPServer(("127.0.0.1", 0), Site)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    try:
+        url = f"http://127.0.0.1:{server.server_port}/"
+        captured, text, _, document = asyncio.run(capture(url, False, 3, False, [], False))
+    finally:
+        server.shutdown()
+    assert [c.body for c in captured] == [{"to": "BGY", "price": 12}]
+    assert text == "EUR 12.00" and document.startswith("HTTP 200")
