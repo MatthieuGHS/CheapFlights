@@ -1,0 +1,15 @@
+# Azair : recherche flexible « n'importe où », combinaisons low-cost (compagnies différentes,
+# aéroports d'arrivée et de départ différents). Chaque résultat contient les deux vols (aller et
+# retour) : ils entrent comme vols datés dans l'assemblage. Une URL par origine ({origin}) ;
+# fenêtre : jetons {d0} {dlast} {ym0} {ym1}.
+name: azair
+mode: fetcher
+urls:
+  - "https://www.azair.eu/azfin.php?searchtype=flexi&tp=0&isOneway=return&srcAirport=%5B{origin}%5D&srcFreeAirport=&srcTypedText=&dstAirport=Anywhere+%5BXXX%5D&dstTypedText=any&dstFreeAirport=&depmonth={ym0}&depdate={d0}&arrmonth={ym1}&arrdate={dlast}&minDaysStay=1&maxDaysStay=3&dep0=true&dep1=true&dep2=true&dep3=true&dep4=true&dep5=true&dep6=true&arr0=true&arr1=true&arr2=true&arr3=true&arr4=true&arr5=true&arr6=true&samedep=true&samearr=true&minHourStay=0%3A45&maxHourStay=23%3A20&minHourOutbound=0%3A00&maxHourOutbound=24%3A00&minHourInbound=0%3A00&maxHourInbound=24%3A00&autoprice=true&adults=1&children=0&infants=0&maxChng=0&currency=EUR&indexSubmit=Search"
+date_format: "%d/%m/%y %H:%M"
+extract:
+  kind: selectors
+  item: "div.result"
+  fields:
+    url: "a[href*='book/b.php']::attr(href)"
+  pattern: '(?P<date>\d{2}/\d{2}/\d{2})\n(?P<time>\d{2}:\d{2})\n[^\n]*\n(?P<origin>[A-Z]{3})\n\d{2}:\d{2} [^\n]*\n(?P<destination>[A-Z]{3})\n.*?€(?P<price>[0-9.,]+)\n.*?\n[A-Z0-9]{2}\d{2,4}\n(?P<airline>[^\n]+)\n'

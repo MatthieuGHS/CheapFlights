@@ -61,7 +61,7 @@ class JsonTap(BaseModel):
     kind: Literal["json"]
     response_url_contains: str
     items: str
-    fields: dict[str, str]
+    fields: dict[str, str]  # clés : origin, destination, price, url, [currency, day, back, airline]
     currency: str = "EUR"
 
 
@@ -125,38 +125,41 @@ def deals_from_rows(
     deals: list[Deal] = []
     fares: list[Fare] = []
     for row in rows:
-        m = next(
-            (
-                m
-                for t in (row.get("title", ""), row.get("text", ""))
-                if (m := re.search(pattern, t, re.DOTALL))
-            ),
-            None,
-        )
-        if not m or not row.get("url"):
-            continue
-        name, groups = m["origin"].strip(), m.groupdict()
-        destination = re.sub(r"[^\w\s'.-]", "", m["destination"]).strip()
-        origin = src.cities.get(name, name if re.fullmatch(r"[A-Z]{3}", name) else None)
-        money = parse_money(m["price"])
-        eur = fx.to_eur(money[0], money[1]) if money else None
-        if not origin or eur is None:
-            continue
-        if groups.get("date") and src.date_format:
-            with contextlib.suppress(ValueError):
-                when = dt.datetime.strptime(groups["date"].strip(), src.date_format)
-                airline = (groups.get("airline") or src.name).strip()
-                fares.append(
-                    Fare(src.name, airline, origin, destination, when, eur, None,
-                         row["url"])
-                )  # fmt: skip
-        else:
-            deals.append(Deal(src.name, row["title"].strip(), origin, destination,
-                              eur, row["url"]))  # fmt: skip
+        found: list[re.Match[str]] = []
+        for t in (row.get("title", ""), row.get("text", "")):
+            found = list(re.finditer(pattern, t, re.DOTALL))
+            if found:
+                break
+        for m in found if row.get("url") else []:
+            _add_match(src, row, m, fx, deals, fares)
     return deals, fares
 
 
+def _add_match(
+    src: Source, row: dict[str, str], m: re.Match[str], fx: Fx, deals: list[Deal], fares: list[Fare]
+) -> None:
+    groups = m.groupdict()
+    name = m["origin"].strip()
+    destination = re.sub(r"[^\w\s'.-]", "", m["destination"]).strip()
+    origin = src.cities.get(name, name if re.fullmatch(r"[A-Z]{3}", name) else None)
+    money = parse_money(m["price"])
+    eur = fx.to_eur(money[0], money[1]) if money else None
+    if not origin or eur is None:
+        return
+    if groups.get("date") and src.date_format:
+        stamp = f"{groups['date'].strip()} {(groups.get('time') or '').strip()}".strip()
+        with contextlib.suppress(ValueError):
+            when = dt.datetime.strptime(stamp, src.date_format)
+            airline = (groups.get("airline") or src.name).strip()
+            fares.append(Fare(src.name, airline, origin, destination, when, eur, None, row["url"]))
+    else:
+        title = row["title"].strip()
+        deals.append(Deal(src.name, title, origin, destination, eur, row["url"]))
+
+
 def deals_from_json(src: Source, payload: Any, fx: Fx) -> list[Deal]:
+    """Champs reconnus : origin, destination, price, url (requis) ; day, back (ISO), airline,
+    when (facultatifs). Un url relatif est résolu contre la première URL de la source."""
     ex = src.extract
     assert isinstance(ex, JsonTap)
     deals = []
@@ -165,15 +168,29 @@ def deals_from_json(src: Source, payload: Any, fx: Fx) -> list[Deal]:
             got = {k: _dig(item, path) for k, path in ex.fields.items()}
         except (KeyError, IndexError, TypeError, ValueError):
             continue
-        money = parse_money(str(got.get("price")), ex.currency)
+        cur = ex.currency
+        if "currency" in got:
+            cur = str(got["currency"])
+        money = parse_money(str(got.get("price")), cur)
         eur = fx.to_eur(money[0], money[1]) if money else None
         origin = src.cities.get(str(got.get("origin")), str(got.get("origin")))
-        if eur is not None and got.get("url"):
-            when = got.get("when")
-            deals.append(Deal(src.name, f"{origin} -> {got.get('destination')}", origin,
-                              str(got.get("destination")), eur, str(got["url"]),
-                              None if when is None else str(when)))  # fmt: skip
+        if eur is None or not got.get("url"):
+            continue
+        days = [_iso(got.get("day")), _iso(got.get("back"))]
+        when = got.get("when") or (" -> ".join(str(d) for d in days if d) or None)
+        deals.append(Deal(
+            src.name, f"{origin} -> {got.get('destination')}", origin, str(got.get("destination")),
+            eur, urljoin(src.urls[0], str(got["url"])), when and str(when), days[0], days[1],
+            str(got["airline"]) if got.get("airline") else None,
+        ))  # fmt: skip
     return deals
+
+
+def _iso(value: Any) -> dt.date | None:
+    try:
+        return dt.date.fromisoformat(str(value)[:10])
+    except ValueError:
+        return None
 
 
 def rows_from_rss(body: bytes) -> list[dict[str, str]]:
@@ -201,7 +218,23 @@ def page_rows(src: Source, ex: Selectors, page: Any) -> list[dict[str, str]]:
     return rows
 
 
-def _spider(src: Source, mode: str) -> Any:
+def expand_urls(
+    urls: list[str], d0: dt.date, d1: dt.date, nights: int, origins: list[str]
+) -> list[str]:
+    """Jetons {d0}, {d1}, {dlast} (d1 + nuits max), {ym0}, {ym1} ; une URL portant {origin}
+    est répétée pour chaque aéroport d'origine."""
+    last = d1 + dt.timedelta(days=nights)
+    tokens = {"{d0}": d0.isoformat(), "{d1}": d1.isoformat(), "{dlast}": last.isoformat(),
+              "{ym0}": d0.strftime("%Y%m"), "{ym1}": last.strftime("%Y%m")}  # fmt: skip
+    out = []
+    for u in urls:
+        for k, v in tokens.items():
+            u = u.replace(k, v)
+        out += [u.replace("{origin}", o) for o in origins] if "{origin}" in u else [u]
+    return out
+
+
+def _spider(src: Source, mode: str, urls: list[str]) -> Any:
     from scrapling.fetchers import AsyncDynamicSession, AsyncStealthySession, FetcherSession
     from scrapling.spiders import Spider
 
@@ -210,7 +243,7 @@ def _spider(src: Source, mode: str) -> Any:
 
     class Generic(Spider):
         name = src.name
-        start_urls = src.urls
+        start_urls = urls
         concurrent_requests = 2
         download_delay = 1.0
         logging_level = 40
@@ -246,13 +279,16 @@ def _spider(src: Source, mode: str) -> Any:
     return Generic()
 
 
-def run_source(src: Source, fx: Fx) -> tuple[list[Deal], list[Fare], int, str]:
+def run_source(
+    src: Source, fx: Fx, window: tuple[dt.date, dt.date, int, list[str]] | None = None
+) -> tuple[list[Deal], list[Fare], int, str]:
     """(bons plans, vols datés, pages demandées, mode qui a marché). Lève LookupError si aucun
     mode ne livre."""
     last: Exception | None = None
+    urls = expand_urls(src.urls, *window) if window else src.urls
     for mode in MODES[MODES.index(src.mode) :]:
         try:
-            result = _spider(src, mode).start()
+            result = _spider(src, mode, urls).start()
         except Exception as e:
             last = e
             continue

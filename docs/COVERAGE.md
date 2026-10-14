@@ -63,3 +63,17 @@ Corendon, Jet2 — leurs sièges se vendent surtout via les voyagistes (lot A).
 | jacksflightclub.com | bons plans | bloqué | fetcher | `/deals` : 404 (offres réservées aux abonnés) |
 | theflightdeal.com | bons plans US | accessible, écarté | fetcher | départs États-Unis uniquement |
 | sites LT/LV/EE de bons plans | bons plans | non trouvé | — | recherche web sans résultat exploitable ; `skrydziai.lt` (certificat invalide) et `lowcost.lt` (DNS) inaccessibles |
+| azair.eu | agrégateur « n'importe où » | **source** (`azair.yaml`) | fetcher | recherche flexible par URL, 1 requête par origine, ~25 résultats chacune : vols aller et retour datés, compagnie et lien de réservation, combinaisons multi-compagnies |
+| kayak.com/explore | agrégateur « n'importe où » | **source** (`kayak-explore.yaml`) | dynamic (XHR `explorePageDestinations`) | 161 destinations par origine en 1 chargement ; aller-retour avec dates, compagnie, prix USD converti ; fenêtre filtrée côté recherche |
+| momondo.com/explore | agrégateur | accessible, doublon | fetcher + dynamic | même moteur et même API que Kayak, non ajouté |
+| kiwi.com (`/search/results/…/anywhere`) | agrégateur | accessible, sans prix | fetcher, dynamic | page chargée (920 Ko) mais aucun prix dans le DOM ni dans les XHR capturés en 45 s : résultats derrière un GraphQL non déclenché |
+| skyscanner.net | agrégateur | bloqué | fetcher, dynamic | `/flights-from/vno/` répond sans prix exploitable (9 occurrences) ; page « everywhere » : délai dépassé (100 s) sans réponse, anti-bot probable |
+| aviasales.com | agrégateur | non trouvé | fetcher | URL `/routes/vno` : 404 ; pas de recherche « partout » localisée |
+| trip.com | agrégateur | non trouvé | dynamic | accueil seul accessible ; URL « vers n'importe où » : 404 |
+| edreams.com, opodo.com | agrégateur | non trouvé | fetcher | `/flights/vilnius/` : 404 ; pas d'URL de découverte trouvée |
+| airbaltic.com | compagnie | bloqué (page de route) | fetcher | page « flights-from-vilnius » : 404 avec marqueur CAPTCHA |
+| norwegian.com | compagnie | non trouvé | fetcher, stealthy | URL de route : 404 |
+| lot.com, flysas.com, lufthansa.com, swiss.com, austrian.com, brusselsairlines.com, klm.com, airfrance.lt, eurowings.com, turkishairlines.com | compagnie | non trouvé | fetcher | URLs « flights-from-vilnius » devinées : 404 ; réservation par moteur privé |
+| finnair.com | compagnie | accessible, sans prix | fetcher | page `/flights/from/vno` 200 mais prix rendus côté client (textes de traduction seulement) |
+| flypgs.com (Pegasus), smartwings.com | compagnie | bloqué | 3 modes | 403 (Pegasus) ; Cloudflare « Un instant… » (Smartwings) |
+| flydubai.com, aegeanair.com, elal.com, buzzair.com | compagnie | accessible, sans prix | fetcher/stealthy | accueils sans tarif exploitable (moteur de réservation JS) |

@@ -35,6 +35,9 @@ class Deal:
     price: Decimal
     url: str
     when: str | None = None  # date ou période, telle que la source la donne
+    day: date | None = None  # départ, quand la source le donne
+    back: date | None = None  # retour
+    airline: str | None = None
 
 
 @dataclass(frozen=True)

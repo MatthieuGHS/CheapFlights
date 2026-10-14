@@ -45,6 +45,14 @@ class Result:
     sources: dict[str, SourceReport] = field(default_factory=dict)
 
 
+def _in_window(d: Deal, d0: date, d1: date, cfg: LastMinute) -> bool:
+    """Un bon plan daté part dans la fenêtre et revient en `max_nights` ; sans date, gardé."""
+    if d.day is None:
+        return True
+    nights_ok = d.back is None or (d.back - d.day).days <= cfg.max_nights
+    return d0 <= d.day <= d1 and nights_ok
+
+
 def _sample(d0: date, d1: date, n: int) -> list[date]:
     span = (d1 - d0).days
     return sorted({d0 + timedelta(days=round(i * span / max(n - 1, 1))) for i in range(n)})
@@ -118,7 +126,9 @@ async def run(
         for src in generic.load_sources():
 
             def one(src: generic.Source = src) -> tuple[list[Deal], int]:
-                got, fares, pages, mode = generic.run_source(src, rates)
+                got, fares, pages, mode = generic.run_source(
+                    src, rates, (d0, d1, cfg.max_nights, cfg.origins)
+                )
                 web_fares.extend(fares)
                 modes[src.name] = mode
                 return got, pages
@@ -126,7 +136,7 @@ async def run(
             got = await call(f"web:{src.name}", one)
             if src.name in modes:
                 reports[f"web:{src.name}"].mode = modes[src.name]
-            deals += [d for d in got if d.origin in origins]
+            deals += [d for d in got if d.origin in origins and _in_window(d, d0, d1, cfg)]
         return deals
 
     ry, wz, gg, deals = await asyncio.gather(

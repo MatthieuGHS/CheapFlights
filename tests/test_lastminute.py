@@ -249,3 +249,42 @@ def test_fly4free_com_feed_titles() -> None:
         ("VNO", "South Korea", Decimal("585.00")),
         ("RIX", "spectacular Faroe Islands", Decimal("208.00")),
     ]
+
+
+def test_azair_fixture_gives_both_legs_with_airline_and_booking_link() -> None:
+    from pathlib import Path
+
+    from scrapling.parser import Selector
+
+    src = next(s for s in generic.load_sources() if s.name == "azair")
+    assert isinstance(src.extract, generic.Selectors)
+    html = (Path(__file__).parent / "fixtures/web/azair.html").read_text()
+    page = Selector(html, url="https://www.azair.eu/azfin.php")
+    _, fares = generic.deals_from_rows(src, generic.page_rows(src, src.extract, page), FX2)
+    assert len(fares) == 4  # 2 résultats x (aller + retour)
+    out, back = fares[0], fares[1]
+    assert (out.origin, out.destination, out.airline) == ("VNO", "NUE", "Ryanair")
+    assert out.departure.hour == 12 and out.price == Decimal("21.99")
+    assert (back.origin, back.destination) == ("NUE", "VNO") and back.day > out.day
+    assert out.url and out.url.startswith("https://www.azair.eu/book/b.php")
+
+
+def test_kayak_explore_json_gives_dated_round_trips_converted_to_eur() -> None:
+    src = next(s for s in generic.load_sources() if s.name == "kayak-explore")
+    payload = {"destinations": [
+        {"originAirportCode": "VNO", "airport": {"iata": "BGY"}, "dateDepart": "2026-11-28",
+         "dateReturn": "2026-11-30", "airline": "Ryanair", "clickoutUrl": "/flights/VNO-BGY/",
+         "flightInfo": {"localePrice": {"price": 55.0, "currency": "USD"}}},
+        {"originAirportCode": "VNO", "airport": {"iata": "XXX"}, "clickoutUrl": "/x/",
+         "flightInfo": {"localePrice": {"price": 10, "currency": "ZZZ"}}},  # devise inconnue
+    ]}  # fmt: skip
+    (d,) = generic.deals_from_json(src, payload, FX2)
+    assert (d.origin, d.destination, d.price, d.airline) == (
+        "VNO",
+        "BGY",
+        Decimal("50.00"),
+        "Ryanair",
+    )
+    assert (d.day, d.back) == (date(2026, 11, 28), date(2026, 11, 30))
+    assert d.url == "https://www.kayak.com/flights/VNO-BGY/"
+    assert d.when == "2026-11-28 -> 2026-11-30"
