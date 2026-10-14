@@ -3,7 +3,7 @@
 Moteur local qui cherche les voyages en avion les moins chers au départ de Vilnius, Kaunas et Riga,
 toutes destinations confondues. Spécification complète : [`docs/SPEC.md`](docs/SPEC.md).
 
-État : **phase 0** (fondations). Pas encore de recherche.
+État : **phases 0 à 2** livrées (moteur, API, interface). Phases 3 à 5 en pause (voir `docs/SPEC.md` §14).
 
 ## Installation (Arch Linux)
 
@@ -37,13 +37,27 @@ Les valeurs estimées sont marquées `# à ajuster`.
 ## Commandes
 
 ```bash
-uv run pytest                              # tests
+uv run cheaphops search --weeks 4          # recherche en ligne de commande (top-K dans le terminal)
+uv run cheaphops search --budget 0         # rejoue sur le cache seul, aucune requête réseau
+uv run cheaphops serve                     # API + interface sur http://127.0.0.1:8000
+
+cd web && npm install && npm run build     # interface servie ensuite par `cheaphops serve`
+cd web && npm run dev                      # interface en dev (proxy /api vers le port 8000)
+
+uv run pytest                              # tests (fixtures, jamais de réseau)
 uv run ruff check . && uv run ruff format --check .
 uv run mypy cheaphops scripts tests
+cd web && npx oxlint src                   # lint de l'interface
+uv run python scripts/smoke.py ryanair VNO BGY 2026-11   # smoke test live d'une recette
+uv run python -m cheaphops.recon <url> --goal calendar --headed --stealth --wait 600
 uv run python scripts/bedrock_check.py     # modèles Bedrock disponibles
 ```
 
-## Architecture (phase 0)
+Navigateurs : `uv run playwright install chromium chromium-headless-shell` et
+`uv run patchright install chromium` (sans `--with-deps`, qui ne gère pas Arch). Wizz ouvre une
+fenêtre Chromium visible pendant une recherche (Kasada refuse le headless).
+
+## Architecture
 
 ```
 cheaphops/core/models.py   modèles pydantic : SearchParams, DayFare, Flight, GroundEdge, Manifest…
@@ -52,9 +66,21 @@ cheaphops/core/db.py       SQLite + migrations SQL numérotées (PRAGMA user_ver
 cheaphops/core/ctx.py      Ctx : ce qu'une recette reçoit
 cheaphops/core/log.py      logs JSON sur stderr
 cheaphops/fetch/http.py    ctx.http : allowlist du manifeste, rate limit par domaine, cache, stats
-cheaphops/recipes/base.py  interface Recipe
-scripts/bedrock_check.py   inventaire et test d'accès Bedrock
+cheaphops/fetch/ladder.py  classification des réponses, choix du rung
+cheaphops/fetch/transports.py  rungs 1-4 : httpx, curl_cffi, Scrapling furtif + curl_cffi, navigateur
+cheaphops/recipes/         interfaces, registre, recettes ryanair/v1 et wizzair/v1 (+ fixtures)
+cheaphops/recon/           outil recon : capture du trafic, candidates IATA + prix
+cheaphops/search/          grille Explore, candidats (borne), composition horaire, Verify, budget
+cheaphops/api/app.py       FastAPI : recherches, progression SSE, résultats, santé des sources
+web/                       interface Vite + React + Tailwind
+scripts/                   bedrock_check, smoke
 ```
+
+Recherche (§9) : l'Explore remplit une grille de prix minimaux par jour (Wizz `farechart`,
+Ryanair disponibilité par fenêtres de 7 jours), sous un budget de requêtes ; les candidats
+aller/retour sont produits par borne croissante ; le Verify charge les vrais horaires et s'arrête
+quand plus aucun candidat ne peut battre le K-ième voyage vérifié. Wizz ne fournit pas d'horaires :
+ses voyages sont des allers-retours directs badgés « horaires et aéroport de départ à vérifier ».
 
 Une recette n'accède au réseau que par `ctx.http` :
 
