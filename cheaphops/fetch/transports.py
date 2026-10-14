@@ -100,7 +100,7 @@ class StealthCookieTransport:
             page = await StealthyFetcher.async_fetch(
                 self._manifest.home_url,
                 page_setup=lambda page: page.on("request", self._count),
-                headless=self._cfg.browser_headless,
+                headless=True,  # jamais de fenêtre visible
                 solve_cloudflare=False,  # §2.3 : aucun contournement de CAPTCHA
                 disable_resources=True,
                 timeout=self._cfg.timeout_s * 1000,
@@ -172,7 +172,7 @@ class BrowserTransport:
         self._pw = self._pw or await async_playwright().start()
         self._ctx = self._ctx or await self._pw.chromium.launch_persistent_context(
             str(self._cfg.browser_dir / self._manifest.source),
-            headless=self._cfg.browser_headless and not self._manifest.headed,
+            headless=True,  # jamais de fenêtre visible
         )
         page = await self._ctx.new_page()
 

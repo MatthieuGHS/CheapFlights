@@ -5,7 +5,6 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 import pytest
-import yaml
 
 from cheaphops.core.config import load_config
 from cheaphops.core.models import Manifest
@@ -13,6 +12,11 @@ from cheaphops.fetch.transports import BrowserTransport, CurlTransport, HttpxTra
 from cheaphops.fetch.types import HttpRequest, Transport, TransportError
 
 pytestmark = pytest.mark.anyio
+MANIFEST = Manifest.model_validate({
+    "source": "ryanair", "version": 1, "allowed_domains": ["ryanair.com"],
+    "home_url": "https://www.ryanair.com/", "block_markers": [], "cookie_headers": {},
+    "preferred_rung": 3, "rate_limit": {"min_interval_s": 1.5, "jitter_s": 1.0},
+})  # fmt: skip
 CFG = load_config(Path(__file__).parent.parent / "config.yaml", Path("/nonexistent")).http
 
 
@@ -80,8 +84,7 @@ async def test_redirect_not_followed(base: str, transport: Transport) -> None:
 
 
 async def test_browser_rung_fetches_from_the_page(base: str, tmp_path: Path) -> None:
-    ryanair = Path(__file__).parent.parent / "cheaphops/recipes/ryanair/v1/manifest.yaml"
-    manifest = Manifest.model_validate(yaml.safe_load(ryanair.read_text()))
+    manifest = MANIFEST
     # model_copy ne revalide pas : le manifeste exige https, le serveur de test est en http local
     local = manifest.model_copy(
         update={"source": "local", "home_url": f"{base}/home", "cookie_headers": {"x-csrf": "tok"}}
@@ -144,8 +147,7 @@ async def test_browser_rung_retries_page_load_without_relaunching(
             return Driver()
 
     monkeypatch.setattr("cheaphops.fetch.transports.async_playwright", Starter)
-    ryanair = Path(__file__).parent.parent / "cheaphops/recipes/ryanair/v1/manifest.yaml"
-    manifest = Manifest.model_validate(yaml.safe_load(ryanair.read_text()))
+    manifest = MANIFEST
     t = BrowserTransport(CFG.model_copy(update={"browser_dir": tmp_path}), manifest)
     req = HttpRequest.build("GET", "https://www.ryanair.com/api/x")
     with pytest.raises(TransportError):

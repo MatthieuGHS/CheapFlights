@@ -1,10 +1,10 @@
 from pathlib import Path
-from typing import Annotated, Any, Literal, Self
+from typing import Annotated, Any, Literal
 
 import yaml
-from pydantic import Field, model_validator
+from pydantic import Field
 
-from cheaphops.core.models import GroundEdge, Iata, Model, Price, SearchDefaults
+from cheaphops.core.models import Iata, Model
 
 
 class HttpConfig(Model):
@@ -18,91 +18,32 @@ class HttpConfig(Model):
     block_markers: list[str]  # corps de réponse d'un mur anti-bot -> monter d'un rung
     captcha_markers: list[str]  # CAPTCHA -> source bloquée, jamais résolu
     impersonate: str  # profil TLS curl_cffi des rungs 2 et 3
-    browser_headless: bool
     browser_dir: Path  # profils persistants du rung 4
 
 
-class ModelPrice(Model):
-    """USD par million de tokens."""
+class Google(Model):
+    """Google Flights ne sait pas « partir vers n'importe où » : une requête = un aller simple
+    origine -> destination à une date. On échantillonne donc des destinations de hubs."""
 
-    input: Price
-    output: Price
-    cache_read: Price
-    cache_write: Price
-
-
-class LlmCaps(Model):
-    per_run_usd: Price
-    pathfinder_run_usd: Price
-    total_usd: Price
-
-    @model_validator(mode="after")
-    def _pathfinder_above_run(self) -> Self:
-        if self.pathfinder_run_usd < self.per_run_usd:
-            raise ValueError("pathfinder_run_usd must be >= per_run_usd")
-        return self
+    destinations: list[Iata]
+    dates: Annotated[int, Field(ge=1)]  # dates échantillonnées, réparties dans la fenêtre
 
 
-class ModelRole(Model):
-    model_id: str | None  # None tant que scripts/bedrock_check.py n'a pas été lancé
-    price: ModelPrice
-
-
-class LlmConfig(Model):
-    region: str
-    profile: str | None
-    fast: ModelRole
-    strong: ModelRole
-    caps: LlmCaps
-
-
-class Penalties(Model):
-    airport_night_eur: Price  # escale qui couvre la nuit (01:00-05:00 locales)
-
-
-class SearchConfig(Model):
-    defaults: SearchDefaults
-    bound_slack: Annotated[float, Field(gt=0, le=1)]
-    request_budget: Annotated[int, Field(ge=0)]  # requêtes de scraping max par recherche
-    verify_reserve: Annotated[float, Field(ge=0, lt=1)]  # part du budget gardée pour le Verify
-    sources: list[str]  # recettes interrogées, dans l'ordre de priorité du budget
-    penalties: Penalties
-    presets: dict[str, SearchDefaults]
-
-    @model_validator(mode="before")
-    @classmethod
-    def _presets_override_defaults(cls, data: Any) -> Any:
-        if isinstance(data, dict) and isinstance(data.get("defaults"), dict):
-            raw = data.get("presets") or {}
-            data = data | {"presets": {k: data["defaults"] | v for k, v in raw.items()}}
-        return data
+class LastMinute(Model):
+    origins: Annotated[list[Iata], Field(min_length=1)]
+    days: Annotated[int, Field(ge=0)]  # départs de J+0 à J+days
+    max_nights: Annotated[int, Field(ge=0)]
+    top: Annotated[int, Field(ge=1)]
+    return_candidates: Annotated[int, Field(ge=0)]  # destinations dont on cherche le retour
+    request_budget: Annotated[int, Field(ge=1)]
+    google: Google
 
 
 class Config(Model):
     db_path: Path
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR"]
     http: HttpConfig
-    llm: LlmConfig
-    search: SearchConfig
-
-
-class MetroConfig(Model):
-    radius_km: Annotated[float, Field(gt=0)]
-    transfer_cost_eur: Price
-    transfer_min: Annotated[int, Field(ge=0)]
-    overrides: dict[str, list[Iata]]  # nom de métropole -> aéroports, prioritaire sur le rayon
-
-
-class GroundConfig(Model):
-    edges: list[GroundEdge]
-    metro: MetroConfig
-
-    @model_validator(mode="after")
-    def _unique_pairs(self) -> Self:
-        pairs = [frozenset((e.a, e.b)) for e in self.edges]
-        if len(pairs) != len(set(pairs)):
-            raise ValueError("duplicate ground edge (edges are bidirectional)")
-        return self
+    lastminute: LastMinute
 
 
 def _merge(base: dict[str, Any], over: dict[str, Any]) -> dict[str, Any]:
@@ -126,7 +67,3 @@ def load_config(path: Path = Path("config.yaml"), local: Path | None = None) -> 
     if local.exists():
         data = _merge(data, _read(local))
     return Config.model_validate(data)
-
-
-def load_ground(path: Path = Path("ground.yaml")) -> GroundConfig:
-    return GroundConfig.model_validate(_read(path))

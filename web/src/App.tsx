@@ -1,65 +1,85 @@
 import { useEffect, useState } from 'react'
-import { followSearch, getSearch, type SearchEvent, type Status } from './api'
-import { Health } from './Health'
-import { Progress } from './Progress'
+import { followSearch, getConfig, getSearch, startSearch, type Config, type SearchEvent, type Status } from './api'
 import { Results } from './Results'
-import { SearchForm } from './SearchForm'
-
-type Tab = 'search' | 'health'
 
 export default function App() {
-  const [tab, setTab] = useState<Tab>('search')
+  const [config, setConfig] = useState<Config | null>(null)
+  const [days, setDays] = useState(10)
+  const [nights, setNights] = useState(3)
+  const [origins, setOrigins] = useState('')
   const [runId, setRunId] = useState<string | null>(null)
   const [events, setEvents] = useState<SearchEvent[]>([])
   const [status, setStatus] = useState<Status | null>(null)
+  const [error, setError] = useState<string | null>(null)
 
-  const start = (id: string) => {
-    setEvents([])
-    setStatus(null)
-    setRunId(id)
-  }
+  useEffect(() => {
+    getConfig()
+      .then((c) => {
+        setConfig(c)
+        setDays(c.days)
+        setNights(c.max_nights)
+        setOrigins(c.origins.join(','))
+      })
+      .catch((e: unknown) => setError(String(e)))
+  }, [])
 
   useEffect(() => {
     if (!runId) return
     return followSearch(runId, (e) => {
       setEvents((prev) => [...prev, e])
-      if (e.type !== 'finished') return
+      if (e.type !== 'done') return
       getSearch(runId)
         .then(setStatus)
         .catch((err: unknown) => setStatus({ id: runId, done: true, error: String(err), result: null }))
     })
   }, [runId])
 
+  const running = runId !== null && status === null
+  const go = () => {
+    setEvents([])
+    setStatus(null)
+    setError(null)
+    startSearch({ days, max_nights: nights, origins: origins.split(',').map((s) => s.trim().toUpperCase()) })
+      .then((r) => setRunId(r.id))
+      .catch((e: unknown) => setError(String(e)))
+  }
+
   return (
-    <div className="mx-auto max-w-6xl px-4 py-6">
-      <header className="mb-6 flex items-baseline justify-between">
-        <h1 className="text-2xl font-semibold tracking-tight">Cheap Hops</h1>
-        <nav className="flex gap-1 text-sm">
-          {(
-            [
-              ['search', 'Recherche'],
-              ['health', 'Santé des sources'],
-            ] as const
-          ).map(([key, label]) => (
-            <button
-              key={key}
-              onClick={() => setTab(key)}
-              className={`rounded px-3 py-1.5 ${tab === key ? 'bg-stone-900 text-white dark:bg-stone-100 dark:text-stone-900' : 'hover:bg-stone-200 dark:hover:bg-stone-800'}`}
-            >
-              {label}
-            </button>
+    <div className="mx-auto max-w-4xl space-y-6 px-4 py-6">
+      <h1 className="text-2xl font-semibold tracking-tight">Cheap Hops · dernière minute</h1>
+      <form
+        className="flex flex-wrap items-end gap-3 text-sm"
+        onSubmit={(e) => {
+          e.preventDefault()
+          go()
+        }}
+      >
+        <label>
+          Départs de J+0 à J+
+          <input type="number" min={0} value={days} onChange={(e) => setDays(+e.target.value)} className="ml-1 w-16 rounded border px-2 py-1" />
+        </label>
+        <label>
+          Nuits max
+          <input type="number" min={0} value={nights} onChange={(e) => setNights(+e.target.value)} className="ml-1 w-16 rounded border px-2 py-1" />
+        </label>
+        <label>
+          Origines
+          <input value={origins} onChange={(e) => setOrigins(e.target.value)} className="ml-1 w-40 rounded border px-2 py-1" />
+        </label>
+        <button disabled={running || !config} className="rounded bg-stone-900 px-4 py-1.5 text-white disabled:opacity-50 dark:bg-stone-100 dark:text-stone-900">
+          {running ? 'Recherche…' : 'Chercher'}
+        </button>
+      </form>
+      {error && <p className="text-red-600">{error}</p>}
+      {running && (
+        <ul className="text-sm text-stone-500">
+          {events.map((e, i) => (
+            <li key={i}>{e.type === 'source' ? `${e.source} : ${e.error ?? `${e.fares} tarifs`} (${e.requests} req)` : null}</li>
           ))}
-        </nav>
-      </header>
-      {tab === 'search' ? (
-        <main className="space-y-6">
-          <SearchForm running={runId !== null && status === null} onStarted={start} />
-          {runId && <Progress events={events} />}
-          {status && <Results status={status} />}
-        </main>
-      ) : (
-        <Health />
+        </ul>
       )}
+      {status?.error && <p className="text-red-600">{status.error}</p>}
+      {status?.result && <Results result={status.result} />}
     </div>
   )
 }

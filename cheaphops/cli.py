@@ -1,102 +1,69 @@
-"""cheaphops search : lance une recherche et affiche le top-K."""
+"""cheaphops search : dernière minute partout, récap en quelques lignes. cheaphops serve : l'UI."""
 
 import argparse
 import asyncio
 import sys
-from datetime import date, timedelta
-from typing import Any
+from datetime import date
 
-from cheaphops.core.config import Config, load_config, load_ground
-from cheaphops.core.db import connect
+from cheaphops.core.config import load_config
 from cheaphops.core.log import setup_logging
-from cheaphops.core.models import SearchParams
-from cheaphops.search.engine import Event, run_search
-from cheaphops.search.model import Segment, Trip
+from cheaphops.lastminute.fares import Fare, RoundTrip
+from cheaphops.lastminute.run import Result, run
 
 
-def build_params(args: argparse.Namespace, config: Config, today: date) -> SearchParams:
-    defaults = config.search.presets[args.preset] if args.preset else config.search.defaults
-    params = defaults.params(today)
-    update: dict[str, Any] = {}
-    if args.origins:
-        update["origins"] = args.origins.split(",")
-    if args.weeks:
-        update["date_to"] = params.date_from + timedelta(weeks=args.weeks)
-    if args.top:
-        update["top_k"] = args.top
-    return SearchParams.model_validate(params.model_dump() | update)
+def _fare(f: Fare) -> str:
+    return f"{f.origin}->{f.destination} {f.departure:%a %d/%m %H:%M} {f.airline} {f.price} €"
 
 
-def _when(s: Segment) -> str:
-    if s.departure and s.arrival:
-        return f"{s.departure:%a %d/%m %H:%M} -> {s.arrival:%H:%M}"
-    return f"{s.day:%a %d/%m} (horaire inconnu)"
-
-
-def render(trips: list[Trip]) -> str:
-    head = f"{'#':>2}  {'dest':4} {'total €':>8} {'score':>8}  {'dates':13} {'nuits':>5}"
-    lines = [f"{head} {'sur place':>9}  badges"]
-    for i, t in enumerate(trips, 1):
-        dates = f"{t.outbound[0].day:%d/%m}-{t.inbound[-1].day:%d/%m}"
-        site = f"{t.on_site_hours:.0f} h" if t.on_site_hours is not None else "?"
+def render(r: Result, top: int = 10) -> str:
+    lines = [f"{r.seconds:.0f} s, {r.requests} requêtes"]
+    for name, s in r.sources.items():
+        state = f"ERREUR {s.error}" if s.error else "ok"
         lines.append(
-            f"{i:>2}  {t.destination:4} {t.total_eur:>8} {t.score:>8}  {dates:13} {t.nights:>5} "
-            f"{site:>9}  {', '.join(t.badges)}"
+            f"  {name}: {state}, {s.fares} tarifs ({s.in_window} dans la fenêtre), {s.requests} req, {s.seconds:.0f} s"
         )
-        for g in t.ground:
-            lines.append(
-                f"      sol  {g.origin}->{g.destination}  {g.duration_min} min  {g.cost_eur} €"
-            )
-        for s in (*t.outbound, *t.inbound):
-            lines.append(
-                f"      {s.source:8} {s.flight_no or '':7} {s.origin}->{s.destination}  "
-                f"{_when(s):28} {s.price_eur:>7} €  {s.booking_url or ''}"
-            )
+    lines.append(f"Top {top} aller-retours :")
+    lines += [_trip(t) for t in r.roundtrips[:top]] or ["  (aucun)"]
+    lines.append(f"Top {top} allers simples :")
+    lines += [f"  {_fare(f)}" for f in r.oneways[:top]]
     return "\n".join(lines)
 
 
-def progress(e: Event) -> None:
-    print(" ".join(f"{k}={v}" for k, v in e.items()), file=sys.stderr)
+def _trip(t: RoundTrip) -> str:
+    return f"  {t.total} € / {t.nights} n : {_fare(t.out)} | {_fare(t.back)}"
 
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="cheaphops")
     sub = ap.add_subparsers(dest="command", required=True)
-    s = sub.add_parser("search", help="cherche les voyages les moins chers")
-    s.add_argument("--preset", help="preset de config.yaml (ex. weekend)")
+    s = sub.add_parser("search", help="dernière minute depuis les origines vers partout")
+    s.add_argument("--days", type=int, help="départs de J+0 à J+N (défaut : config)")
     s.add_argument("--origins", help="ex. VNO,KUN,RIX")
-    s.add_argument("--weeks", type=int, help="fenêtre de départ en semaines")
-    s.add_argument("--top", type=int, help="nombre de résultats")
-    s.add_argument("--budget", type=int, help="requêtes de scraping max (défaut : config)")
     srv = sub.add_parser("serve", help="API + interface web sur http://127.0.0.1:PORT")
     srv.add_argument("--port", type=int, default=8000)
     args = ap.parse_args(argv)
 
+    config = load_config()
+    setup_logging(config.log_level)
     if args.command == "serve":
         import uvicorn
 
         from cheaphops.api.app import create_app
 
-        setup_logging(load_config().log_level)
         uvicorn.run(create_app(), host="127.0.0.1", port=args.port)  # local uniquement
         return 0
 
-    config = load_config()
-    if args.budget is not None:
-        search = config.search.model_copy(update={"request_budget": args.budget})
-        config = config.model_copy(update={"search": search})
-    setup_logging(config.log_level)
-    today = date.today()
-    params = build_params(args, config, today)
-    result = asyncio.run(
-        run_search(params, config, load_ground(), connect(config.db_path), today, progress)
-    )
-    print(render(result.trips))
-    note = " (budget épuisé)" if result.budget_exhausted else ""
-    print(
-        f"\n{len(result.trips)} voyages, {result.candidates} candidats, {result.pruned} paires "
-        f"écartées par la borne, {result.requests} requêtes de scraping{note}"
-    )
+    lm = config.lastminute
+    update = {
+        k: v
+        for k, v in (
+            ("days", args.days),
+            ("origins", args.origins.split(",") if args.origins else None),
+        )
+        if v is not None
+    }
+    lm = lm.model_copy(update=update)
+    print(render(asyncio.run(run(lm, date.today(), lambda e: print(e, file=sys.stderr)))))
     return 0
 
 

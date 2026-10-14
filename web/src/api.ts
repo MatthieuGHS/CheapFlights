@@ -2,74 +2,38 @@ import { z } from 'zod'
 
 // Frontière avec l'API : tout ce qui arrive est validé ici, puis typé dans le reste de l'UI.
 
-const Deadline = z.object({ at: z.string(), weekday: z.number().nullable() })
-const Blackout = z.object({ start: z.string(), end: z.string() })
-
-export const SearchOptions = z.object({
-  home: z.string(),
+export const Config = z.object({
   origins: z.array(z.string()),
+  days: z.number(),
   max_nights: z.number(),
-  min_on_site_hours: z.number(),
-  return_deadline: Deadline.nullable(),
-  depart_weekdays: z.array(z.number()).nullable(),
-  return_weekdays: z.array(z.number()).nullable(),
-  blackout: z.array(Blackout),
-  max_total_price: z.number().nullable(),
-  allow_self_transfer: z.boolean(),
-  max_stops_per_direction: z.number(),
-  min_connection_hours: z.number(),
-  max_layover_hours: z.number(),
-  allow_open_jaw: z.boolean(),
-  top_k: z.number(),
-})
-export type SearchOptions = z.infer<typeof SearchOptions>
-
-const Defaults = SearchOptions.extend({ start_offset_days: z.number(), window_days: z.number() })
-export type Defaults = z.infer<typeof Defaults>
-
-const Config = z.object({
-  defaults: Defaults,
-  origins: z.array(z.string()),
-  presets: z.record(z.string(), Defaults),
+  top: z.number(),
   request_budget: z.number(),
 })
 export type Config = z.infer<typeof Config>
 
-const Segment = z.object({
+const Fare = z.object({
   source: z.string(),
+  airline: z.string(),
   origin: z.string(),
   destination: z.string(),
-  day: z.string(),
-  price_eur: z.number(),
-  departure: z.string().nullable(),
-  arrival: z.string().nullable(),
+  departure: z.string(),
+  price: z.number(),
   flight_no: z.string().nullable(),
-  booking_url: z.string().nullable(),
-  fetched_at: z.string().nullable(),
+  url: z.string().nullable(),
 })
-export type Segment = z.infer<typeof Segment>
-
-const Trip = z.object({
-  outbound: z.array(Segment),
-  inbound: z.array(Segment),
-  ground: z.array(
-    z.object({ origin: z.string(), destination: z.string(), duration_min: z.number(), cost_eur: z.number() }),
-  ),
-  score: z.number(),
-  total_eur: z.number(),
-  nights: z.number(),
-  on_site_hours: z.number().nullable(),
-  badges: z.array(z.string()),
-})
-export type Trip = z.infer<typeof Trip>
+export type Fare = z.infer<typeof Fare>
 
 const Result = z.object({
-  trips: z.array(Trip),
+  oneways: z.array(Fare),
+  roundtrips: z.array(z.object({ out: Fare, back: Fare })),
   requests: z.number(),
-  budget_exhausted: z.boolean(),
-  candidates: z.number(),
-  pruned: z.number(),
+  seconds: z.number(),
+  sources: z.record(
+    z.string(),
+    z.object({ requests: z.number(), fares: z.number(), seconds: z.number(), error: z.string().nullable() }),
+  ),
 })
+export type Result = z.infer<typeof Result>
 
 const Status = z.object({
   id: z.string(),
@@ -79,60 +43,19 @@ const Status = z.object({
 })
 export type Status = z.infer<typeof Status>
 
-// Événements du moteur (cheaphops/search/engine.py). Un événement qui ne valide pas est signalé
-// en console, jamais affiché : il trahit une dérive du contrat entre moteur et interface.
+// Événements de cheaphops/lastminute/run.py. Un événement hors contrat est signalé en console.
 export const SearchEvent = z.discriminatedUnion('type', [
-  z.object({ type: z.literal('explore'), level: z.number(), source: z.string(), routes: z.number() }),
   z.object({
-    type: z.literal('progress'),
-    phase: z.enum(['explore', 'verify']),
-    done: z.number(),
-    of: z.number(),
-    source: z.string().optional(),
-    level: z.number().optional(),
-    requests: z.number(),
-    cache_hits: z.number().optional(),
-    rung: z.number().nullable().optional(),
-  }),
-  z.object({ type: z.literal('budget'), source: z.string(), what: z.string() }),
-  z.object({
-    type: z.literal('error'),
+    type: z.literal('source'),
     source: z.string(),
-    what: z.string(),
-    error: z.string(),
-    blocked: z.boolean().optional(),
-  }),
-  z.object({ type: z.literal('candidates'), count: z.number() }),
-  z.object({
-    type: z.literal('done'),
-    trips: z.number(),
+    fares: z.number(),
     requests: z.number(),
-    pruned: z.number(),
-    fx_skipped: z.number(),
+    error: z.string().nullable(),
   }),
-  z.object({ type: z.literal('finished'), error: z.string().nullable() }),
+  z.object({ type: z.literal('finished'), requests: z.number(), seconds: z.number() }),
+  z.object({ type: z.literal('done'), error: z.string().nullable() }),
 ])
 export type SearchEvent = z.infer<typeof SearchEvent>
-
-const Source = z.object({
-  source: z.string(),
-  version: z.number(),
-  status: z.string(),
-  capabilities: z.array(z.string()),
-  preferred_rung: z.number(),
-  blocked_until: z.number().nullable(),
-  blocked_reason: z.string().nullable(),
-  rungs: z.array(
-    z.object({
-      rung: z.number(),
-      successes: z.number(),
-      failures: z.number(),
-      browser_requests: z.number(),
-      last_failure: z.string().nullable(),
-    }),
-  ),
-})
-export type Source = z.infer<typeof Source>
 
 async function call<T>(schema: z.ZodType<T>, url: string, init?: RequestInit): Promise<T> {
   const r = await fetch(url, { headers: { 'content-type': 'application/json' }, ...init })
@@ -142,15 +65,12 @@ async function call<T>(schema: z.ZodType<T>, url: string, init?: RequestInit): P
 }
 
 export const getConfig = () => call(Config, '/api/config')
-export const saveDefaults = (defaults: Partial<Defaults>) =>
-  call(Config, '/api/config/defaults', { method: 'PUT', body: JSON.stringify(defaults) })
-export const startSearch = (request: { preset: string | null; overrides: Record<string, unknown> }) =>
+export const startSearch = (request: { days: number; origins: string[]; max_nights: number }) =>
   call(z.object({ id: z.string() }), '/api/searches', { method: 'POST', body: JSON.stringify(request) })
 export const getSearch = (id: string) => call(Status, `/api/searches/${id}`)
-export const getSources = () => call(z.array(Source), '/api/sources')
 
-/** Abonnement SSE ; renvoie la fonction de désabonnement. Une coupure (serveur redémarré,
- * recherche inconnue) devient un événement `finished` en erreur : l'UI ne reste jamais bloquée. */
+/** Abonnement SSE ; renvoie la fonction de désabonnement. Une coupure devient un événement
+ * `done` en erreur : l'UI ne reste jamais bloquée. */
 export function followSearch(id: string, onEvent: (e: SearchEvent) => void): () => void {
   const source = new EventSource(`/api/searches/${id}/events`)
   source.onmessage = (msg: MessageEvent<string>) => {
@@ -160,11 +80,11 @@ export function followSearch(id: string, onEvent: (e: SearchEvent) => void): () 
       return
     }
     onEvent(parsed.data)
-    if (parsed.data.type === 'finished') source.close()
+    if (parsed.data.type === 'done') source.close()
   }
   source.onerror = () => {
     source.close()
-    onEvent({ type: 'finished', error: 'connexion au serveur perdue' })
+    onEvent({ type: 'done', error: 'connexion au serveur perdue' })
   }
   return () => source.close()
 }

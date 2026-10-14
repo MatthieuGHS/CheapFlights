@@ -17,51 +17,15 @@ http:
   # signatures de murs, jamais le mot nu « captcha » : un site normal cite reCAPTCHA dans ses mentions
   captcha_markers: [captcha-delivery, challenge-platform, cf-turnstile, px-captcha, hcaptcha.com/1/api]  # à ajuster
   impersonate: chrome
-  browser_headless: true
   browser_dir: data/browser
 
-llm:
-  region: eu-north-1
-  profile: bedrock         # profil de ~/.aws/config
-  # Accès vérifié par `bedrock_check.py --ping` le 2026-10-14 (Haiku 5.5 et Sonnet 5/5.5 refusés).
-  fast:                    # Claude Haiku
-    model_id: eu.anthropic.claude-haiku-4-5-20251001-v1:0
-    price: {input: 1.00, output: 5.00, cache_read: 0.10, cache_write: 1.25}    # USD/Mtok, à ajuster
-  strong:                  # Claude Sonnet
-    model_id: eu.anthropic.claude-sonnet-4-6
-    price: {input: 3.00, output: 15.00, cache_read: 0.30, cache_write: 3.75}   # USD/Mtok, à ajuster
-  caps:
-    per_run_usd: 0.50
-    pathfinder_run_usd: 2.00   # à ajuster
-    total_usd: 40
-
-search:
-  bound_slack: 0.8           # borne basse = prix calendrier × 0.8 (le calendrier peut surestimer)
-  request_budget: 400        # requêtes de scraping max par recherche (Explore + Verify), à ajuster
-  verify_reserve: 0.3        # part du budget gardée pour le Verify, à ajuster
-  sources: [wizzair, ryanair]  # Wizz d'abord : un appel farechart couvre 19 jours et 2 sens
-  penalties:
-    airport_night_eur: 15    # escale de nuit en aéroport, à ajuster
-  defaults:                  # preset « N'importe quand »
-    home: VNO
-    origins: [VNO, KUN, RIX]
-    start_offset_days: 1
-    window_days: 56          # 8 semaines
-    max_nights: 3
-    min_on_site_hours: 24
-    return_deadline: null
-    depart_weekdays: null
-    return_weekdays: null
-    blackout: []             # ex. {start: 2026-12-14T08:00, end: 2026-12-18T18:00}
-    max_total_price: null
-    allow_self_transfer: true
-    max_stops_per_direction: 1
-    min_connection_hours: 3  # self-transfer : aucune protection
-    max_layover_hours: 18
-    allow_open_jaw: true
-    top_k: 30
-  presets:                   # surcharges appliquées aux défauts
-    weekend:
-      depart_weekdays: [4, 5]       # ven, sam
-      return_weekdays: [6, 0]       # dim, lun
-      return_deadline: {at: "12:00", weekday: 0}   # lundi 12:00
+lastminute:
+  origins: [VNO, KUN, RIX]
+  days: 10                 # départs de J+0 à J+10
+  max_nights: 3
+  top: 30                  # lignes affichées par tableau
+  return_candidates: 8     # destinations dont on va chercher le vol retour (1 requête chacune)
+  request_budget: 60       # requêtes réseau max par recherche, toutes sources
+  google:                  # complément : compagnies que Ryanair/Wizz ne couvrent pas
+    destinations: [WAW, CPH, HEL, FRA]
+    dates: 2               # origines x destinations x dates = requêtes

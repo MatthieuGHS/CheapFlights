@@ -30,15 +30,12 @@ def manifest(source: str = "ryanair", domains: tuple[str, ...] = ("ryanair.com",
         {
             "source": source,
             "version": 1,
-            "capabilities": {"calendar"},
             "allowed_domains": list(domains),
             "home_url": f"https://www.{domains[0]}/",
             "preferred_rung": 1,
             "block_markers": ["Availability declined"],
-            "headed": False,
             "cookie_headers": {},
             "rate_limit": {"min_interval_s": 2.0, "jitter_s": 0.5},
-            "status": "active",
         }
     )
 
