@@ -102,6 +102,8 @@ class CtxHttp:
         self._vary = [h.lower() for h in config.vary_headers]
         self._ttl = {"explore": config.explore_ttl_s, "verify": config.verify_ttl_s, "none": 0}
         self.sent = 0  # requêtes de scraping réellement envoyées (cache exclu), pour le budget
+        self.cache_hits = 0
+        self.last_rung: int | None = None  # rung de la dernière réponse réseau, pour l'UI
 
     async def __aenter__(self) -> "CtxHttp":
         return self
@@ -136,6 +138,7 @@ class CtxHttp:
         self._check_allowed(req.url)
         ttl, key = self._ttl[freshness], self._cache_key(req)
         if ttl and (hit := self._cached(key, ttl)):
+            self.cache_hits += 1
             return hit  # même pendant un backoff : le cache ne coûte aucune requête
         self._check_not_blocked()
         if not self._gate():
@@ -156,6 +159,7 @@ class CtxHttp:
             if outcome is not Outcome.RATE_LIMITED:
                 rung_ok = outcome in (Outcome.OK, Outcome.FAILED)
                 self._record(rung, None if rung_ok else f"{outcome} HTTP {result.status}", latency)
+            self.last_rung = rung
             if outcome is Outcome.OK:
                 self._set_blocked(None)
                 self._store(key, result)  # « none » : ne pas lire le cache, mais toujours l'écrire

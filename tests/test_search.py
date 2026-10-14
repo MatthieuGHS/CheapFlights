@@ -118,33 +118,63 @@ def test_untimed_segments_get_badge_and_no_on_site() -> None:
 def grid(*quotes: tuple[str, str, str, int, int]) -> Grid:
     g: Grid = {}
     for src, o, d, day, price in quotes:
-        g.setdefault((o, d), {})[date(2026, 11, day)] = Quote(
-            src, o, d, date(2026, 11, day), Decimal(price)
-        )
+        q = Quote(src, o, d, date(2026, 11, day), Decimal(price))
+        g.setdefault((src, o, d), {})[q.day] = q
     return g
 
 
-def run(g: Grid, p: SearchParams | None = None, keep: int = 30) -> Any:
-    return candidates(g, p or params(), GROUND, Decimal("0.8"), keep, {"ryanair"}, Decimal(15))
+def run(g: Grid, p: SearchParams | None = None) -> list[Any]:
+    ranked = candidates(g, p or params(), GROUND, Decimal("0.8"), {"ryanair"}, Decimal(15))
+    return list(ranked.stream)
 
 
-def test_branch_and_bound_never_drops_a_pair_that_could_beat_the_kth() -> None:
-    quotes = [
+def test_stream_is_complete_and_sorted_by_bound() -> None:
+    q = [
         ("ryanair", "VNO", d, day, 10 + 7 * i + day)
         for i, d in enumerate(("BGY", "STN", "BVA"))
         for day in (2, 4, 6)
     ]
-    quotes += [
+    q += [
         ("ryanair", d, "VNO", day, 12 + 5 * i + day)
         for i, d in enumerate(("BGY", "STN", "BVA"))
         for day in (4, 6, 8)
     ]
-    g = grid(*quotes)
-    kept, pruned = run(g, keep=3)
-    assert pruned > 0 and len(kept) >= 3
-    every = [c for c in run(g, keep=10_000)[0]]  # sans élagage effectif
-    kth = sorted(c.total for c in every)[2]
-    assert {(c.out, c.ret) for c in every if c.bound <= kth} <= {(c.out, c.ret) for c in kept}
+    got = run(grid(*q))
+    assert [c.bound for c in got] == sorted(c.bound for c in got)
+    outs = [leg for c in got for leg in (c.out,)]
+    assert len({(c.out, c.ret) for c in got}) == len(got) and outs
+
+
+def test_stream_is_lazy_so_verify_can_stop_early() -> None:
+    q = [("ryanair", "VNO", "BGY", day, 10 + day) for day in range(2, 20)]
+    q += [("ryanair", "BGY", "VNO", day, 10 + day) for day in range(2, 22)]
+    ranked = candidates(grid(*q), params(), GROUND, Decimal("0.8"), {"ryanair"}, Decimal(15))
+    first = next(ranked.stream)
+    assert first.total == 24 and ranked.examined[0] < ranked.pairs // 10  # aller et retour le 2
+
+
+def test_cheaper_untimed_fare_does_not_erase_timed_self_transfer() -> None:
+    g = grid(
+        ("wizzair", "VNO", "BGY", 6, 5), ("ryanair", "VNO", "BGY", 6, 30),
+        ("ryanair", "BGY", "OPO", 6, 10), ("ryanair", "OPO", "VNO", 9, 40),
+    )  # fmt: skip
+    assert any(len(c.out.quotes) == 2 and c.out.end == "OPO" for c in run(g))
+
+
+def test_mixed_timed_and_untimed_trip_rejected() -> None:
+    g = grid(("wizzair", "VNO", "BGY", 6, 5), ("ryanair", "BGY", "VNO", 9, 30))
+    assert run(g) == []
+
+
+def test_untimed_trip_checked_at_worst_case() -> None:
+    g = grid(
+        ("wizzair", "VNO", "LTN", 6, 5),
+        ("wizzair", "LTN", "VNO", 7, 5),
+        ("wizzair", "LTN", "VNO", 8, 9),
+    )
+    got = run(g)
+    assert [c.ret.first_day.day for c in got] == [8]  # retour le 7 : peut-être 1 h sur place
+    assert all(c.untimed for c in got)
 
 
 def test_untimed_source_never_in_self_transfer() -> None:
@@ -152,9 +182,7 @@ def test_untimed_source_never_in_self_transfer() -> None:
         ("wizzair", "VNO", "STN", 6, 10), ("ryanair", "STN", "BGY", 6, 10),
         ("ryanair", "BGY", "VNO", 9, 10), ("wizzair", "VNO", "BGY", 6, 30),
     )  # fmt: skip
-    kept, _ = run(g)
-    assert kept and all(len(c.out.quotes) == 1 for c in kept if c.untimed)
-    assert all(not c.untimed for c in kept if len(c.out.quotes) > 1)
+    assert all(not c.untimed for c in run(g) if len(c.out.quotes) > 1)
 
 
 def test_open_jaw_switch_and_date_level_max_nights() -> None:
@@ -163,6 +191,5 @@ def test_open_jaw_switch_and_date_level_max_nights() -> None:
         ("ryanair", "BGY", "KUN", 8, 10),
         ("ryanair", "BGY", "VNO", 12, 5),
     )
-    kept, _ = run(g)
-    assert [(c.ret.end, c.ret.last_day.day) for c in kept] == [("KUN", 8)]  # le 12 : 6 nuits
-    assert run(g, params(allow_open_jaw=False))[0] == []
+    assert [(c.ret.end, c.ret.last_day.day) for c in run(g)] == [("KUN", 8)]  # le 12 : 6 nuits
+    assert run(g, params(allow_open_jaw=False)) == []

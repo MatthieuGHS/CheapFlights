@@ -39,7 +39,6 @@ search:
   bound_slack: 0.8           # borne basse = prix calendrier × 0.8 (le calendrier peut surestimer)
   request_budget: 400        # requêtes de scraping max par recherche (Explore + Verify), à ajuster
   verify_reserve: 0.3        # part du budget gardée pour le Verify, à ajuster
-  candidate_factor: 3        # le Verify peut invalider des candidats : on en garde 3 × top_k
   sources: [wizzair, ryanair]  # Wizz d'abord : un appel farechart couvre 19 jours et 2 sens
   penalties:
     airport_night_eur: 15    # escale de nuit en aéroport, à ajuster

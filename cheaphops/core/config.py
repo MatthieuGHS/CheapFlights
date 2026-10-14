@@ -65,7 +65,6 @@ class SearchConfig(Model):
     bound_slack: Annotated[float, Field(gt=0, le=1)]
     request_budget: Annotated[int, Field(ge=0)]  # requêtes de scraping max par recherche
     verify_reserve: Annotated[float, Field(ge=0, lt=1)]  # part du budget gardée pour le Verify
-    candidate_factor: Annotated[int, Field(ge=1)]  # candidats gardés = top_k * facteur
     sources: list[str]  # recettes interrogées, dans l'ordre de priorité du budget
     penalties: Penalties
     presets: dict[str, SearchDefaults]

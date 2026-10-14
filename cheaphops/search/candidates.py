@@ -1,15 +1,19 @@
-"""Génération des candidats au niveau jour (§9), avec branch-and-bound sur la borne basse.
+"""Candidats au niveau jour (§9), livrés par borne basse croissante.
 
-Un candidat est un aller et un retour construits sur la grille Explore (prix minimal par jour).
-Les filtres de ce niveau sont des relaxations : ils n'écartent jamais un voyage que le Verify,
-avec les vrais horaires, aurait accepté. Seuls les segments sans horaires (Wizz) y reçoivent
-leur contrôle définitif, prudent.
+Un candidat est un aller et un retour construits sur la grille Explore (prix minimal par jour et
+par source). Les filtres de ce niveau sont des relaxations : ils n'écartent jamais un voyage que
+le Verify, avec les vrais horaires, aurait accepté. Seuls les voyages sans horaires (Wizz) y
+reçoivent leur contrôle définitif, au pire cas.
+
+Le branch-and-bound se fait au Verify : il consomme ce flux tant que la borne du candidat suivant
+peut encore battre le K-ième score *vérifié*. Couper ici sur des prix de grille serait faux : un
+candidat bon marché peut échouer au Verify.
 """
 
 import heapq
 from collections import defaultdict
-from collections.abc import Iterable
-from dataclasses import dataclass
+from collections.abc import Iterable, Iterator
+from dataclasses import dataclass, field
 from datetime import date, datetime, time, timedelta
 from decimal import Decimal
 
@@ -17,7 +21,7 @@ from cheaphops.core.config import GroundConfig
 from cheaphops.core.models import SearchParams
 from cheaphops.search.model import GroundLeg, Quote
 
-Grid = dict[tuple[str, str], dict[date, Quote]]
+Grid = dict[tuple[str, str, str], dict[date, Quote]]  # (source, origine, destination)
 
 
 @dataclass(frozen=True)
@@ -55,7 +59,16 @@ class Candidate:
     metro_cost: Decimal  # transfert entre deux aéroports d'une même ville de destination
     total: Decimal  # prix de grille + sol + transfert
     bound: Decimal  # prix de grille * slack + sol + transfert : borne basse du vrai prix
-    untimed: bool  # au moins un segment d'une source sans horaires (Wizz)
+    untimed: bool  # voyage d'une source sans horaires (Wizz)
+
+
+@dataclass
+class Ranked:
+    """Flux des candidats ; `examined` / `pairs` mesurent ce que le branch-and-bound a épargné."""
+
+    stream: Iterator[Candidate]
+    pairs: int
+    examined: list[int] = field(default_factory=lambda: [0])
 
 
 def ground_leg(ground: GroundConfig, a: str, b: str) -> GroundLeg | None:
@@ -80,7 +93,7 @@ def legs(
     n'utilise que des sources horodatées et part le jour même ou le lendemain du hub."""
     starts = set(starts)
     by_origin: dict[str, list[tuple[str, dict[date, Quote]]]] = defaultdict(list)
-    for (o, d), fares in grid.items():
+    for (_, o, d), fares in grid.items():
         by_origin[o].append((d, fares))
     out: list[Leg] = []
     for o in starts:
@@ -101,39 +114,29 @@ def legs(
     return out
 
 
-def deadline_day(params: SearchParams, leave: date) -> date | None:
-    dl = params.return_deadline
-    if dl is None or dl.weekday is None:
-        return None
-    return leave + timedelta(days=(dl.weekday - leave.weekday()) % 7)
-
-
-def date_level_ok(c_out: Leg, c_ret: Leg, params: SearchParams, untimed: bool) -> bool:
-    if c_ret.first_day < c_out.last_day:
+def date_level_ok(out: Leg, ret: Leg, params: SearchParams, untimed: bool) -> bool:
+    if ret.first_day < out.last_day:
         return False
-    if (c_ret.last_day - c_out.first_day).days > params.max_nights:
+    if (ret.last_day - out.first_day).days > params.max_nights:
         return False
-    on_site_max = ((c_ret.first_day - c_out.last_day).days + 1) * 24
-    if on_site_max < params.min_on_site_hours:
+    if params.depart_weekdays and out.first_day.weekday() not in params.depart_weekdays:
         return False
-    if params.depart_weekdays and c_out.first_day.weekday() not in params.depart_weekdays:
+    if params.return_weekdays and ret.first_day.weekday() not in params.return_weekdays:
         return False
-    if params.return_weekdays and c_ret.first_day.weekday() not in params.return_weekdays:
-        return False
-    limit = deadline_day(params, c_out.first_day)
-    if limit is not None and c_ret.last_day > limit:
-        return False
+    deadline = params.return_deadline
+    limit = deadline.limit_day(out.first_day) if deadline else None
     if untimed:
-        # contrôle définitif prudent : sans horaires, on suppose le pire
-        if (c_ret.first_day - c_out.last_day).days * 24 < params.min_on_site_hours:
+        # contrôle définitif au pire cas : arrivée à 23:59, retour à 00:00, rentré à 23:59
+        if (ret.first_day - out.last_day).days * 24 - 24 < params.min_on_site_hours:
             return False
-        span = (
-            datetime.combine(c_out.first_day, time.min),
-            datetime.combine(c_ret.last_day, time.max),
-        )
-        if any(b.start < span[1] and b.end > span[0] for b in params.blackout):
+        if limit is not None and ret.last_day >= limit:
             return False
-    return True
+        span = (datetime.combine(out.first_day, time.min), datetime.combine(ret.last_day, time.max))
+        return not params.blocked(*span)
+    # relaxation : le meilleur cas des horaires doit pouvoir passer
+    if ((ret.first_day - out.last_day).days + 1) * 24 < params.min_on_site_hours:
+        return False
+    return limit is None or ret.last_day <= limit
 
 
 def candidates(
@@ -141,16 +144,12 @@ def candidates(
     params: SearchParams,
     ground: GroundConfig,
     slack: Decimal,
-    keep: int,
     timed: set[str],
     metro_transfer: Decimal,
-) -> tuple[list[Candidate], int]:
-    """Renvoie les candidats dont la borne basse peut battre le `keep`-ième meilleur prix de
-    grille, triés par prix, et le nombre de paires aller/retour écartées par la borne."""
-    out_days = {
-        params.date_from + timedelta(days=i)
-        for i in range((params.date_to - params.date_from).days + 1)
-    }
+) -> Ranked:
+    """Candidats valides au niveau jour, par borne basse croissante, générés paresseusement."""
+    span = (params.date_to - params.date_from).days + 1
+    out_days = {params.date_from + timedelta(days=i) for i in range(span)}
     back_days = {d + timedelta(days=i) for d in out_days for i in range(params.max_nights + 1)}
     stops = params.max_stops_per_direction if params.allow_self_transfer else 0
     reachable = [o for o in params.origins if o == params.home or _has_edge(ground, params.home, o)]
@@ -159,40 +158,53 @@ def candidates(
     def group(iata: str) -> str:
         return city.get(iata, iata)
 
-    outs_by_group: dict[str, list[Leg]] = defaultdict(list)
+    outs: dict[str, list[Leg]] = defaultdict(list)
     for leg in legs(grid, reachable, out_days, stops, timed):
         if leg.end not in params.origins:
-            outs_by_group[group(leg.end)].append(leg)
-    rets_by_group: dict[str, list[Leg]] = defaultdict(list)
-    dest_airports = {leg.end for g in outs_by_group.values() for leg in g}
+            outs[group(leg.end)].append(leg)
+    rets: dict[str, list[Leg]] = defaultdict(list)
+    dest_airports = {leg.end for g in outs.values() for leg in g}
     for leg in legs(grid, dest_airports, back_days, stops, timed):
         if leg.end in reachable:
-            rets_by_group[group(leg.start)].append(leg)
+            rets[group(leg.start)].append(leg)
 
-    best: list[Decimal] = []  # tas des `keep` meilleurs totaux (négatifs : tas max)
-    found: list[Candidate] = []
-    pruned = 0
-    for g, outs in outs_by_group.items():
-        rets = sorted(rets_by_group.get(g, []), key=lambda leg: leg.price)
-        for out in sorted(outs, key=lambda leg: leg.price):
-            for i, ret in enumerate(rets):
-                kth = -best[0] if len(best) >= keep else None
-                if kth is not None and (out.price + ret.price) * slack > kth:
-                    pruned += len(rets) - i  # les retours suivants sont encore plus chers
-                    break
-                c = _pair(out, ret, params, ground, slack, metro_transfer, timed)
-                if c is None or (kth is not None and c.bound > kth):
-                    continue
-                if params.max_total_price is not None and c.bound > params.max_total_price:
-                    continue
-                found.append(c)
-                heapq.heappush(best, -c.total)
-                if len(best) > keep:
-                    heapq.heappop(best)
-    kth = -best[0] if len(best) >= keep else None
-    kept = [c for c in found if kth is None or c.bound <= kth]
-    pruned += len(found) - len(kept)
-    return sorted(kept, key=lambda c: c.total), pruned
+    pools = [
+        (sorted(outs[g], key=lambda leg: leg.price), sorted(rets[g], key=lambda leg: leg.price))
+        for g in outs
+        if rets.get(g)
+    ]
+    ranked = Ranked(iter(()), sum(len(o) * len(r) for o, r in pools))
+
+    def stream() -> Iterator[Candidate]:
+        # Parcours best-first de chaque grille trié (aller x retour) : la paire (i, j) n'entre
+        # dans la frontière qu'après (i-1, j) ou (i, j-1), donc la frontière sort les paires par
+        # prix de vols croissant. Un candidat n'est livré que quand plus aucune paire de la
+        # frontière ne peut avoir une borne plus basse que la sienne (sol et transfert >= 0).
+        frontier: list[tuple[Decimal, int, int, int]] = []
+        seen: set[tuple[int, int, int]] = set()
+        for p, (o, r) in enumerate(pools):
+            heapq.heappush(frontier, ((o[0].price + r[0].price) * slack, p, 0, 0))
+            seen.add((p, 0, 0))
+        ready: list[tuple[Decimal, int, Candidate]] = []
+        tie = 0
+        while frontier or ready:
+            while frontier and (not ready or frontier[0][0] <= ready[0][0]):
+                _, p, i, j = heapq.heappop(frontier)
+                o, r = pools[p]
+                ranked.examined[0] += 1
+                for ni, nj in ((i + 1, j), (i, j + 1)):
+                    if ni < len(o) and nj < len(r) and (p, ni, nj) not in seen:
+                        seen.add((p, ni, nj))
+                        heapq.heappush(frontier, ((o[ni].price + r[nj].price) * slack, p, ni, nj))
+                c = _pair(o[i], r[j], params, ground, slack, metro_transfer, timed)
+                if c is not None:
+                    tie += 1
+                    heapq.heappush(ready, (c.bound, tie, c))
+            if ready:
+                yield heapq.heappop(ready)[2]
+
+    ranked.stream = stream()
+    return ranked
 
 
 def _has_edge(ground: GroundConfig, a: str, b: str) -> bool:
@@ -208,7 +220,10 @@ def _pair(
     metro: Decimal,
     timed: set[str],
 ) -> Candidate | None:
-    untimed = any(q.source not in timed for q in (*out.quotes, *ret.quotes))
+    sources = {q.source in timed for q in (*out.quotes, *ret.quotes)}
+    if sources == {True, False}:
+        return None  # voyage mixte : les horaires connus d'un sens ne seraient pas contrôlés
+    untimed = sources == {False}
     if untimed and (len(out.quotes) > 1 or len(ret.quotes) > 1):
         return None  # sans horaires, une correspondance n'est pas vérifiable (arbitrage Wizz)
     open_jaw = out.start != ret.end or out.end != ret.start
@@ -216,8 +231,13 @@ def _pair(
         return None
     if not date_level_ok(out, ret, params, untimed):
         return None
-    legs_ = (ground_leg(ground, params.home, out.start), ground_leg(ground, ret.end, params.home))
-    ground_legs = tuple(g for g in legs_ if g is not None)
+    if (
+        params.max_total_price is not None
+        and (out.price + ret.price) * slack > params.max_total_price
+    ):
+        return None
+    pair = (ground_leg(ground, params.home, out.start), ground_leg(ground, ret.end, params.home))
+    ground_legs = tuple(g for g in pair if g is not None)
     fixed = sum((g.cost_eur for g in ground_legs), Decimal(0)) + (
         metro if out.end != ret.start else 0
     )

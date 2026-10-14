@@ -1,4 +1,4 @@
-from datetime import date, time, timedelta
+from datetime import date, datetime, time, timedelta
 from decimal import Decimal
 from enum import StrEnum
 from typing import Annotated, Literal, Self
@@ -72,6 +72,12 @@ class Deadline(Model):
     at: time
     weekday: Weekday | None
 
+    def limit_day(self, leave: date) -> date | None:
+        """Jour limite du retour pour un départ le jour `leave` (None : le jour de l'arrivée)."""
+        if self.weekday is None:
+            return None
+        return leave + timedelta(days=(self.weekday - leave.weekday()) % 7)
+
 
 class SearchOptions(Model):
     """Paramètres §4.2 hors fenêtre de dates. Aucun défaut ici : ils vivent dans config.yaml."""
@@ -91,6 +97,10 @@ class SearchOptions(Model):
     max_layover_hours: Hours
     allow_open_jaw: bool
     top_k: Annotated[int, Field(ge=1)]
+
+    def blocked(self, start: datetime, end: datetime) -> bool:
+        """Un créneau d'indisponibilité chevauche-t-il [start, end] (heures locales naïves) ?"""
+        return any(b.start < end and b.end > start for b in self.blackout)
 
 
 class SearchParams(SearchOptions):

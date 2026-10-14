@@ -50,6 +50,11 @@ Rate limit par domaine enregistrable (fait avant toute requête réelle), fraîc
 - Wizz : le test du rung 4 sous Xvfb n'a pas été fait (paquet absent, pas de sudo) ; le rung 4
   avait déjà échoué en fenêtre visible sur l'écran réel, cas le plus favorable.
 
+## Phase 1c, review thermo-nuclear
+
+- B1-B3 et N1-N4 corrigés. Non vérifié : `max_layover_hours` > 24 h casserait la règle « hub le
+  jour même ou le lendemain » de `candidates.legs()`. Déclencheur : un réglage d'escale > 24 h.
+
 ## Reporté à la phase 2
 
 - 1c : `Segment.fetched_at` vaut l'heure du Verify, même quand la réponse vient du cache.

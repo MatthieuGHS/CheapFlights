@@ -2,7 +2,7 @@
 
 import sqlite3
 import uuid
-from collections.abc import Callable, Mapping
+from collections.abc import Awaitable, Callable, Mapping
 from contextlib import AsyncExitStack
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
@@ -16,7 +16,7 @@ from cheaphops.fetch.http import BudgetExhausted, CtxHttp, FetchFailed, SourceBl
 from cheaphops.fetch.types import Transport
 from cheaphops.recipes.base import RecipeError
 from cheaphops.recipes.registry import LoadedRecipe, load
-from cheaphops.search.candidates import Candidate, Grid, candidates
+from cheaphops.search.candidates import Grid, Ranked, candidates
 from cheaphops.search.fx import ECB, Fx
 from cheaphops.search.graph import assemble, chains
 from cheaphops.search.model import Quote, Segment, Trip
@@ -59,6 +59,11 @@ class _Source:
     def can(self, capability: str) -> bool:
         return capability in self.loaded.manifest.capabilities
 
+    def stats(self) -> Event:
+        http = self.ctx.http
+        return {"source": self.name, "requests": http.sent, "cache_hits": http.cache_hits,
+                "rung": http.last_rung}  # fmt: skip
+
 
 async def run_search(
     params: SearchParams,
@@ -92,33 +97,24 @@ async def run_search(
         for lr in recipes or [load(name) for name in config.search.sources]
     ]
     fx_http = CtxHttp(conn, ECB, config.http, throttle, transports_for(ECB), gate=budget.allow)
-    budget.clients = [*(s.ctx.http for s in sources), fx_http]
     fx = Fx(fx_http)
     async with AsyncExitStack() as stack:
         for http in (*(s.ctx.http for s in sources), fx_http):
             await stack.enter_async_context(http)
         grid = await _explore(sources, params, budget, fx, emit)
         timed = {s.name for s in sources if s.can("day_flights")}
-        keep = params.top_k * config.search.candidate_factor
         slack = Decimal(str(config.search.bound_slack))
-        found, pruned = candidates(
-            grid, params, ground, slack, keep, timed, ground.metro.transfer_cost_eur
-        )
-        emit({"type": "candidates", "count": len(found), "pruned": pruned})
+        ranked = candidates(grid, params, ground, slack, timed, ground.metro.transfer_cost_eur)
+        emit({"type": "candidates", "count": ranked.pairs})
         budget.start_verify()
-        trips = await _verify(found, sources, params, config, fx, budget, emit)
-    emit(
-        {
-            "type": "done",
-            "trips": len(trips),
-            "requests": budget.spent,
-            "fx_skipped": fx.unavailable,
-        }
-    )
-    return SearchResult(trips, budget.spent, budget.exhausted, len(found), pruned)
+        trips = await _verify(ranked, sources, params, config, fx, emit)
+    pruned = ranked.pairs - ranked.examined[0]  # paires jamais examinées : écartées par la borne
+    emit({"type": "done", "trips": len(trips), "requests": budget.spent,
+          "pruned": pruned, "fx_skipped": fx.unavailable})  # fmt: skip
+    return SearchResult(trips, budget.spent, budget.exhausted, ranked.pairs, pruned)
 
 
-async def _guarded(src: _Source, emit: Emit, what: str, call: Any) -> Any:
+async def _guarded[T](src: _Source, emit: Emit, what: str, call: Awaitable[T]) -> T | None:
     """Une erreur de source n'arrête jamais la recherche : elle est signalée, la source continue
     (ou s'arrête si elle est bloquée)."""
     try:
@@ -151,7 +147,7 @@ async def _explore(
             if eur is None:
                 continue
             q = Quote(src.name, f.origin, f.destination, f.day, eur)
-            day_fares = grid.setdefault((f.origin, f.destination), {})
+            day_fares = grid.setdefault((src.name, f.origin, f.destination), {})
             if f.day not in day_fares or eur < day_fares[f.day].price_eur:
                 day_fares[f.day] = q
 
@@ -168,8 +164,8 @@ async def _explore(
                     await add(src, o, d, m)
                 for m in back_months:
                     await add(src, d, o, m)
-                emit({"type": "progress", "phase": "explore", "level": level, "source": src.name,
-                      "done": i + 1, "of": len(pairs), "requests": budget.spent})  # fmt: skip
+                emit({"type": "progress", "phase": "explore", "level": level, "of": len(pairs),
+                      "done": i + 1, **src.stats()})  # fmt: skip
 
     origins = set(params.origins)
     level1: list[tuple[_Source, list[tuple[str, str]]]] = []
@@ -197,8 +193,8 @@ async def _explore(
         direct = {d for _, d in pairs}
         cheapest = {
             d: min(q.price_eur for q in fares.values())
-            for (o, d), fares in grid.items()
-            if o in origins and d in direct and fares
+            for (source, o, d), fares in grid.items()
+            if source == src.name and o in origins and d in direct and fares
         }
         hops: list[tuple[str, str]] = []
         for hub in sorted(cheapest, key=lambda h: cheapest[h]):
@@ -214,16 +210,15 @@ async def _explore(
 
 
 async def _verify(
-    found: list[Candidate],
+    ranked: Ranked,
     sources: list[_Source],
     params: SearchParams,
     config: Config,
     fx: Fx,
-    budget: Budget,
     emit: Emit,
 ) -> list[Trip]:
-    """Vérifie les candidats par borne croissante ; s'arrête quand plus aucun ne peut entrer dans
-    le top-K (borne > K-ième score vérifié) ou quand le budget est épuisé."""
+    """Branch-and-bound (§9) : vérifie les candidats par borne croissante et s'arrête dès que la
+    borne du suivant dépasse le K-ième score vérifié ; aucun candidat restant ne peut entrer."""
     by_name = {s.name: s for s in sources}
     flights: dict[tuple[str, str, str, date], list[Segment]] = {}
     now = datetime.now(UTC)
@@ -253,7 +248,7 @@ async def _verify(
         return flights[key]
 
     best: list[Trip] = []
-    for i, c in enumerate(sorted(found, key=lambda c: c.bound)):
+    for i, c in enumerate(ranked.stream):
         if len(best) >= params.top_k and c.bound > best[params.top_k - 1].score:
             break
         outs = chains([await segments(q) for q in c.out.quotes], params)
@@ -266,13 +261,6 @@ async def _verify(
             best = sorted([*best, min(options, key=lambda t: t.score)], key=lambda t: t.score)[
                 : params.top_k
             ]
-        emit(
-            {
-                "type": "progress",
-                "phase": "verify",
-                "done": i + 1,
-                "of": len(found),
-                "requests": budget.spent,
-            }
-        )
+        emit({"type": "progress", "phase": "verify", "done": i + 1, "of": ranked.pairs,
+              "requests": sum(src.ctx.http.sent for src in sources)})  # fmt: skip
     return best

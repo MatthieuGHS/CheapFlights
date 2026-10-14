@@ -10,7 +10,6 @@ from decimal import Decimal
 
 from cheaphops.core.config import Penalties
 from cheaphops.core.models import SearchParams
-from cheaphops.search.candidates import deadline_day
 from cheaphops.search.model import GroundLeg, Segment, Trip
 
 NIGHT = (time(1), time(5))  # une escale qui couvre ce créneau local est une nuit en aéroport
@@ -79,8 +78,7 @@ def assemble(
         nights = (back.date() - leave.date()).days  # minuits locaux franchis
         if not _within_deadline(params, leave, back):
             return None
-        naive = (leave.replace(tzinfo=None), back.replace(tzinfo=None))
-        if any(b.start < naive[1] and b.end > naive[0] for b in params.blackout):
+        if params.blocked(leave.replace(tzinfo=None), back.replace(tzinfo=None)):
             return None
         if params.depart_weekdays and first.departure.weekday() not in params.depart_weekdays:
             return None
@@ -111,5 +109,5 @@ def _within_deadline(params: SearchParams, leave: datetime, back: datetime) -> b
     dl = params.return_deadline
     if dl is None:
         return True
-    limit_day = deadline_day(params, leave.date()) or back.date()
+    limit_day = dl.limit_day(leave.date()) or back.date()
     return back.replace(tzinfo=None) <= datetime.combine(limit_day, dl.at)
