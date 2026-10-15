@@ -357,6 +357,8 @@ async def run(
             return fares, api.num_queries - before
 
         backs += await call("ryanair", ry_back)
+        if cutoff is not None:  # les retours cherchés après le filtre doivent le respecter aussi
+            backs = [b for b in backs if weekend_back(b, cutoff)[0]]
 
     total = sum(r.requests for r in reports.values())
     dated = dated_deals

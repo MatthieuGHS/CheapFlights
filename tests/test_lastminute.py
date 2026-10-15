@@ -430,3 +430,29 @@ def test_weekend_bundled_deal_and_ryanair_windows() -> None:
         (date(2026, 10, 23), date(2026, 10, 24)),
         (date(2026, 10, 30), date(2026, 10, 31)),
     ]
+
+
+def test_weekend_run_keeps_only_weekend_legs_in_oneways_including_fetched_returns(
+    monkeypatch,
+) -> None:  # type: ignore[no-untyped-def]
+    cfg = load_config().lastminute.model_copy(
+        update={"request_budget": 60, "pause_s": (0, 0), "weekend": True, "days": 14}
+    )
+
+    def fake_ry(api, airport, d0, d1):  # type: ignore[no-untyped-def]
+        api.num_queries += 1
+        if airport in HOME:  # 2026-10-16 = vendredi
+            return [fare(airport, "BGY", "2026-10-16", "20")]
+        return [fare("BGY", "VNO", "2026-10-18", "9"), fare("BGY", "VNO", "2026-10-20", "5")]
+
+    monkeypatch.setattr(sources, "ryanair", fake_ry)
+    monkeypatch.setattr(sources, "wizz", lambda *a, **k: ([], 1))
+    monkeypatch.setattr(sources, "google", lambda *a: ([], 0))
+    monkeypatch.setattr(generic, "load_sources", lambda: [])
+    monkeypatch.setattr(run_mod, "Ryanair", lambda currency: SimpleNamespace(num_queries=0))
+    ground = Ground.model_validate({"home": "VNO", "buses": {}})
+
+    r = asyncio.run(run_mod.run(cfg, ground, date(2026, 10, 14), fx=FX))
+    days = {f.day.isoformat() for f in r.oneways}
+    assert days == {"2026-10-16", "2026-10-18"}  # vendredi (aller) et dimanche (retour)
+    assert [t.total for t in r.roundtrips] == [29]  # le mardi à 5 € est écarté
