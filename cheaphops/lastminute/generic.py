@@ -153,6 +153,12 @@ def _add_match(
         with contextlib.suppress(ValueError):
             when = dt.datetime.strptime(stamp, src.date_format)
             airline = (groups.get("airline") or src.name).strip()
+            arrival = None
+            if groups.get("arr"):  # heure d'arrivée seule : le lendemain si elle précède le départ
+                hour, minute = (int(x) for x in groups["arr"].split(":"))
+                arrival = when.replace(hour=hour, minute=minute)
+                if arrival <= when:
+                    arrival += dt.timedelta(days=1)
             fares.append(
                 Fare(
                     src.name,
@@ -164,6 +170,7 @@ def _add_match(
                     None,
                     row["url"],
                     src.indicative,
+                    arrival,
                 )
             )
     else:

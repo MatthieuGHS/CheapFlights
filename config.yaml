@@ -7,6 +7,8 @@ lastminute:
   origins: [VNO, KUN, RIX]
   days: 10                 # départs de J+0 à J+days (60 max)
   max_nights: 3
+  weekend: false           # --weekend (CLI) ou case à cocher (UI)
+  weekend_return_before: "12:00"   # retour du lundi : arrivée avant cette heure locale
   top: 30                  # lignes affichées par tableau
   optional_origins: [WAW, GDN, TLL]   # ajoutées avec --origins ; bus depuis Vilnius dans ground.yaml
   oneways_max: 300         # allers simples gardés (vue UI avec filtre de prix)

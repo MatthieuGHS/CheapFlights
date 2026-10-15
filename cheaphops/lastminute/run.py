@@ -33,6 +33,8 @@ from cheaphops.lastminute.fares import (
     cheapest_oneways,
     dedupe,
     roundtrips,
+    weekend_back,
+    weekend_out,
 )
 from cheaphops.lastminute.fx import Fx, load_fx
 
@@ -108,12 +110,37 @@ def _targets(
     return found
 
 
+def _ry_windows(d0: date, d1: date, weekend: bool) -> list[tuple[date, date]]:
+    """Plages interrogées sur oneWayFares (une requête par plage et par aéroport, le moins cher
+    par destination). Normal : tranches de 10 jours. Week-end : seulement les vendredis-samedis,
+    où un départ est possible."""
+    if not weekend:
+        step = sources.RYANAIR_SLICE_DAYS
+        return [
+            (d0 + timedelta(lo), min(d0 + timedelta(lo + step - 1), d1))
+            for lo in range(0, (d1 - d0).days + 1, step)
+        ]
+    days = [d0 + timedelta(i) for i in range((d1 - d0).days + 1)]
+    days = [d for d in days if d.weekday() in (4, 5)]
+    windows: list[tuple[date, date]] = []
+    for d in days:
+        if windows and windows[-1][1] == d - timedelta(1):
+            windows[-1] = (windows[-1][0], d)
+        else:
+            windows.append((d, d))
+    return windows
+
+
 def _months(d0: date, last: date) -> list[date]:
     months, cur = [], d0.replace(day=1)
     while cur <= last:
         months.append(cur)
         cur = (cur + timedelta(days=32)).replace(day=1)
     return months
+
+
+def _weekend_leg(f: Fare, cfg: LastMinute) -> bool:
+    return weekend_out(f) or weekend_back(f, cfg.weekend_return_before)[0]
 
 
 def _in_window(d: Deal, d0: date, d1: date, cfg: LastMinute) -> bool:
@@ -170,7 +197,8 @@ async def run(
     n = len(cfg.origins)
     span = cfg.days + cfg.max_nights + 1
     windows = -(-span // (2 * sources.FARECHART_RADIUS + 1))
-    slices = -(-(cfg.days + 1) // sources.RYANAIR_SLICE_DAYS)
+    ry_windows = _ry_windows(d0, d1, cfg.weekend)
+    slices = len(ry_windows)
     returns = 25
     room = cfg.request_budget - n * slices - returns - (1 + n)
     wizz_routes = max(min(cfg.wizz_routes, room // windows), 0)
@@ -185,12 +213,11 @@ async def run(
     def ry_out() -> tuple[list[Fare], int]:
         fares, first = [], True
         for o in cfg.origins:
-            for lo in range(0, cfg.days + 1, sources.RYANAIR_SLICE_DAYS):
+            for lo, hi in ry_windows:
                 if not first:
                     pause()
                 first = False
-                hi = min(lo + sources.RYANAIR_SLICE_DAYS - 1, cfg.days)
-                fares += sources.ryanair(api, o, d0 + timedelta(lo), d0 + timedelta(hi))
+                fares += sources.ryanair(api, o, lo, hi)
         return fares, api.num_queries
 
     web_fares: list[Fare] = []
@@ -234,7 +261,12 @@ async def run(
     months = _months(d0, last)
     ry_cost, wz_cost = 2 * len(months), windows + 1
     used = sum(r.requests for r in reports.values())
-    targets = _targets(pool, dated_deals, origins)
+    if cfg.weekend:  # pas de requête de calendrier pour une route vue seulement un mardi
+        pool_hint = [f for f in pool if not f.indicative or _weekend_leg(f, cfg)]
+        deal_hint = [d for d in dated_deals if d.day and d.day.weekday() in (4, 5)]
+    else:
+        pool_hint, deal_hint = pool, dated_deals
+    targets = _targets(pool_hint, deal_hint, origins)
     todo: dict[str, list[tuple[str, str]]] = {"ryanair": [], "wizzair": []}
     left = cfg.request_budget - used - RESERVE_RETURNS
     for (home, other, kind), _price in sorted(targets.items(), key=lambda kv: kv[1]):
@@ -289,6 +321,10 @@ async def run(
         pool = [f for f in pool if d0 <= f.day <= last]
     outs = [f for f in pool if f.origin in origins and f.day <= d1]
     backs = [f for f in pool if f.destination in origins]
+    cutoff = cfg.weekend_return_before if cfg.weekend else None
+    if cutoff is not None:
+        outs = [f for f in outs if weekend_out(f)]
+        backs = [b for b in backs if weekend_back(b, cutoff)[0]]
     for f in outs:
         reports.setdefault(
             f.source if f.source in reports else f"web:{f.source}", SourceReport()
@@ -328,8 +364,8 @@ async def run(
         (d.origin, d.destination, d.price): d for d in deals if d.day is None or d.back is None
     }
     best_deals = sorted(undated.values(), key=lambda d: d.price)[: cfg.top]
-    trips = roundtrips(outs, backs, cfg.max_nights, bus)
-    trips += bundled_roundtrips(dated, origins, cfg.max_nights, bus)
+    trips = roundtrips(outs, backs, cfg.max_nights, bus, cutoff)
+    trips += bundled_roundtrips(dated, origins, cfg.max_nights, bus, cutoff)
     ranked = best_per_destination(trips)[: cfg.top]
     shown = {t.out.destination for t in ranked}
     calendars = {dest: calendar_for(dest, pool, origins) for dest in shown}
@@ -339,7 +375,7 @@ async def run(
         if dest in shown
     }
     result = Result(
-        cheapest_oneways(outs, cfg.oneways_max),
+        cheapest_oneways([*outs, *(backs if cutoff else [])], cfg.oneways_max),
         ranked,
         alternatives,
         best_deals,

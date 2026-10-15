@@ -8,6 +8,7 @@ export const Config = z.object({
   days: z.number(),
   google: z.object({ enabled: z.boolean() }),
   max_nights: z.number(),
+  weekend: z.boolean(),
   top: z.number(),
   request_budget: z.number(),
 })
@@ -34,6 +35,7 @@ export const RoundTrip = z.object({
   back: Fare,
   bus: Bus,
   bundled: z.boolean(),
+  check_return: z.boolean(),
 })
 export type RoundTrip = z.infer<typeof RoundTrip>
 
@@ -99,7 +101,7 @@ async function call<T>(schema: z.ZodType<T>, url: string, init?: RequestInit): P
 }
 
 export const getConfig = () => call(Config, '/api/config')
-export const startSearch = (request: { days: number; origins: string[]; max_nights: number; google: boolean }) =>
+export const startSearch = (request: { days: number; origins: string[]; max_nights: number; google: boolean; weekend: boolean }) =>
   call(z.object({ id: z.string() }), '/api/searches', { method: 'POST', body: JSON.stringify(request) })
 export const getSearch = (id: string) => call(Status, `/api/searches/${id}`)
 

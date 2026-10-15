@@ -100,6 +100,11 @@ function Trip({ t }: { t: RoundTrip }) {
     <>
       <strong>{total(t).toFixed(2)} €</strong> vols · {nights(t)} nuit{nights(t) > 1 ? 's' : ''}
       <Badge indicative={t.out.indicative || t.back.indicative} />
+      {t.check_return && (
+        <span className="ml-1 rounded bg-sky-100 px-1.5 py-0.5 text-xs text-sky-800 dark:bg-sky-900 dark:text-sky-100">
+          heure de retour à vérifier
+        </span>
+      )}
       <span className="ml-3 text-sm">
         <BusInfo b={t.bus} />
       </span>

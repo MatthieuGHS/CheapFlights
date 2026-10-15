@@ -8,6 +8,7 @@ export default function App() {
   const [nights, setNights] = useState(3)
   const [origins, setOrigins] = useState('')
   const [google, setGoogle] = useState(false)
+  const [weekend, setWeekend] = useState(false)
   const [runId, setRunId] = useState<string | null>(null)
   const [events, setEvents] = useState<SearchEvent[]>([])
   const [status, setStatus] = useState<Status | null>(null)
@@ -21,6 +22,7 @@ export default function App() {
         setNights(c.max_nights)
         setOrigins(c.origins.join(','))
         setGoogle(c.google.enabled)
+        setWeekend(c.weekend)
       })
       .catch((e: unknown) => setError(String(e)))
   }, [])
@@ -41,7 +43,7 @@ export default function App() {
     setEvents([])
     setStatus(null)
     setError(null)
-    startSearch({ days, max_nights: nights, google, origins: origins.split(',').map((s) => s.trim().toUpperCase()) })
+    startSearch({ days, max_nights: nights, google, weekend, origins: origins.split(',').map((s) => s.trim().toUpperCase()) })
       .then((r) => setRunId(r.id))
       .catch((e: unknown) => setError(String(e)))
   }
@@ -68,6 +70,10 @@ export default function App() {
           Origines
           <input value={origins} onChange={(e) => setOrigins(e.target.value)} className="ml-1 w-40 rounded border px-2 py-1" />
           {config && <span className="ml-1 text-stone-500">optionnels : {config.optional_origins.join(', ')}</span>}
+        </label>
+        <label>
+          <input type="checkbox" checked={weekend} onChange={(e) => setWeekend(e.target.checked)} /> Week-end
+          uniquement
         </label>
         <label>
           <input type="checkbox" checked={google} onChange={(e) => setGoogle(e.target.checked)} /> Google Flights

@@ -1,3 +1,4 @@
+from datetime import time
 from decimal import Decimal
 from pathlib import Path
 from typing import Annotated, Any, Literal
@@ -21,6 +22,8 @@ class LastMinute(Model):
     origins: Annotated[list[Iata], Field(min_length=1)]
     days: Annotated[int, Field(ge=0, le=60)]  # départs de J+0 à J+days
     max_nights: Annotated[int, Field(ge=0)]
+    weekend: bool  # départ vendredi/samedi, retour dimanche ou lundi avant `weekend_return_before`
+    weekend_return_before: time  # heure locale d'arrivée du retour du lundi
     top: Annotated[int, Field(ge=1)]
     optional_origins: list[Iata]  # villes voisines, avec bus depuis le domicile (ground.yaml)
     oneways_max: Annotated[int, Field(ge=1)]  # allers simples gardés pour la vue « allers simples »

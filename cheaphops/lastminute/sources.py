@@ -26,10 +26,25 @@ COVERED = ("Ryanair", "Wizz")
 
 
 def ryanair(api: Any, airport: str, d0: dt.date, d1: dt.date) -> list[Fare]:
-    """oneWayFares de ryanair-py : une requête par aéroport, le moins cher vers chaque
-    destination entre d0 et d1 (EUR). `api` est un `ryanair.Ryanair(currency="EUR")`."""
-    return [_ryanair_fare(f) for f in api.get_cheapest_flights(airport, d0, d1)
-            if f.currency == "EUR"]  # fmt: skip
+    """oneWayFares (farfnd, comme ryanair-py) : une requête par aéroport, le moins cher vers
+    chaque destination entre d0 et d1 (EUR), avec l'heure d'arrivée que la lib jette.
+    `api` est un `ryanair.Ryanair(currency="EUR")` : on garde sa session et ses reprises."""
+    data = api._retryable_query(
+        "https://services-api.ryanair.com/farfnd/v4/oneWayFares",
+        {
+            "departureAirportIataCode": airport,
+            "outboundDepartureDateFrom": d0.isoformat(),
+            "outboundDepartureDateTo": d1.isoformat(),
+            "outboundDepartureTimeFrom": "00:00",
+            "outboundDepartureTimeTo": "23:59",
+            "currency": "EUR",
+        },
+    )
+    return [_ryanair_fare(x["outbound"]) for x in data["fares"] or [] if _eur(x["outbound"])]
+
+
+def _eur(f: dict[str, Any]) -> bool:
+    return bool(f["price"]["currencyCode"] == "EUR")
 
 
 def ryanair_calendar(
@@ -52,22 +67,27 @@ def ryanair_calendar(
             when = dt.datetime.fromisoformat(x["departureDate"])
             if d0 <= when.date() <= last:
                 day = when.date().isoformat()
+                arrival = x.get("arrivalDate")
                 fares.append(Fare(
                     "ryanair", "Ryanair", o, d, when, Decimal(str(x["price"]["value"])), None,
                     "https://www.ryanair.com/gb/en/trip/flights/select?adults=1&teens=0"
                     f"&children=0&infants=0&isReturn=false&dateOut={day}&originIata={o}"
                     f"&destinationIata={d}",
+                    arrival=dt.datetime.fromisoformat(arrival) if arrival else None,
                 ))  # fmt: skip
     return fares, len(months)
 
 
-def _ryanair_fare(f: Any) -> Fare:
-    day = f.departureTime.date().isoformat()
+def _ryanair_fare(f: dict[str, Any]) -> Fare:
+    when = dt.datetime.fromisoformat(f["departureDate"])
+    o, d, day = f["departureAirport"]["iataCode"], f["arrivalAirport"]["iataCode"], when.date()
+    arrival = f.get("arrivalDate")
     return Fare(
-        "ryanair", "Ryanair", f.origin, f.destination, f.departureTime, Decimal(str(f.price)),
-        f.flightNumber.replace(" ", ""),
+        "ryanair", "Ryanair", o, d, when, Decimal(str(f["price"]["value"])),
+        f["flightNumber"].replace(" ", ""),
         "https://www.ryanair.com/gb/en/trip/flights/select?adults=1&teens=0&children=0&infants=0"
-        f"&isReturn=false&dateOut={day}&originIata={f.origin}&destinationIata={f.destination}",
+        f"&isReturn=false&dateOut={day.isoformat()}&originIata={o}&destinationIata={d}",
+        arrival=dt.datetime.fromisoformat(arrival) if arrival else None,
     )  # fmt: skip
 
 

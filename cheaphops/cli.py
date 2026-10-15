@@ -52,11 +52,12 @@ def _bus(t: RoundTrip) -> str:
 
 
 def _trip(t: RoundTrip) -> str:
+    check = "  (heure de retour à vérifier)" if t.check_return else ""
     if t.bundled:
         legs = f"{_fare(t.out)} (aller-retour, {t.back.day:%d/%m})"
     else:
         legs = f"{_fare(t.out)} | {_fare(t.back)}"
-    return f"  {t.total} € (vols) / {t.nights} n : {legs}{_bus(t)}"
+    return f"  {t.total} € (vols) / {t.nights} n : {legs}{check}{_bus(t)}"
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -66,6 +67,9 @@ def main(argv: list[str] | None = None) -> int:
     s.add_argument("--days", type=int, help="départs de J+0 à J+N, 60 max (défaut : config)")
     s.add_argument(
         "--google", action="store_true", help="active Google Flights (hubs échantillonnés)"
+    )
+    s.add_argument(
+        "--weekend", action="store_true", help="départ vendredi/samedi, retour dimanche/lundi matin"
     )
     s.add_argument(
         "--all-dates", action="store_true", help="toutes les dates de chaque destination"
@@ -95,6 +99,8 @@ def main(argv: list[str] | None = None) -> int:
         if v is not None
     }
     lm = lm.model_copy(update=update)
+    if args.weekend:
+        lm = lm.model_copy(update={"weekend": True})
     if args.google:
         lm = lm.model_copy(update={"google": lm.google.model_copy(update={"enabled": True})})
     result = asyncio.run(run(lm, load_ground(), date.today(), lambda e: print(e, file=sys.stderr)))

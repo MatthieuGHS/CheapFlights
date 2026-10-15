@@ -28,6 +28,7 @@ class SearchRequest(BaseModel):
     origins: list[str] | None = None
     max_nights: int | None = None
     google: bool | None = None
+    weekend: bool | None = None
 
 
 @dataclass

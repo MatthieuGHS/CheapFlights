@@ -1,7 +1,7 @@
 """Un tarif d'aller simple et l'assemblage pur (sans réseau) des aller-retours."""
 
 from dataclasses import dataclass
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, time, timedelta
 from decimal import Decimal
 
 SAME_DAY_GAP = timedelta(hours=6)  # retour le jour même : les horaires d'arrivée manquent
@@ -31,6 +31,7 @@ class Fare:
     flight_no: str | None
     url: str | None
     indicative: bool = False  # prix d'un agrégateur, non vérifié chez la compagnie
+    arrival: datetime | None = None  # heure locale d'arrivée, quand la source la donne
 
     @property
     def day(self) -> date:
@@ -60,6 +61,7 @@ class RoundTrip:
     back: Fare
     bus: Bus  # info : bus domicile -> départ + arrivée -> domicile (coût et durée cumulés)
     bundled: bool = False  # tarif aller-retour unique (Kayak) : `back.price` vaut 0
+    check_return: bool = False  # week-end : retour du lundi sans heure d'arrivée connue
 
     @property
     def total(self) -> Decimal:
@@ -92,21 +94,51 @@ def cheapest_oneways(fares: list[Fare], top: int) -> list[Fare]:
     return ranked[:top]
 
 
+def weekend_out(f: Fare) -> bool:
+    """Départ le vendredi (toute heure) ou le samedi."""
+    return f.day.weekday() in (4, 5)
+
+
+def weekend_back(f: Fare, cutoff: time) -> tuple[bool, bool]:
+    """(retour acceptable, heure à vérifier) : le dimanche, ou le lundi arrivé avant `cutoff`.
+    Sans heure d'arrivée (Wizz, Kayak : prix au jour), le lundi est accepté mais à vérifier."""
+    wd = f.day.weekday()
+    if wd == 6:
+        return True, False
+    if wd != 0:
+        return False, False
+    if f.arrival is not None:
+        return f.arrival.time() < cutoff, False
+    return True, True
+
+
 def roundtrips(
-    outs: list[Fare], backs: list[Fare], max_nights: int, ground: Ground
+    outs: list[Fare],
+    backs: list[Fare],
+    max_nights: int,
+    ground: Ground,
+    weekend_cutoff: time | None = None,
 ) -> list[RoundTrip]:
     """Deux allers simples quelconques : compagnies différentes, retour vers un autre aéroport
     d'origine (open-jaw côté maison) acceptés. Même aéroport de destination à l'aller et au
     retour, retour au plus `max_nights` nuits après l'aller. `outs` part des origines, `backs`
     arrive aux origines."""
-    pairs = [
-        RoundTrip(o, b, _bus(ground, o.origin, b.destination))
-        for o in outs
-        for b in backs
-        if o.destination == b.origin
-        and 0 <= (b.day - o.day).days <= max_nights
-        and (b.day > o.day or b.departure - o.departure >= SAME_DAY_GAP)
-    ]
+    pairs = []
+    for o in outs:
+        if weekend_cutoff is not None and not weekend_out(o):
+            continue
+        for b in backs:
+            if not (
+                o.destination == b.origin
+                and 0 <= (b.day - o.day).days <= max_nights
+                and (b.day > o.day or b.departure - o.departure >= SAME_DAY_GAP)
+            ):
+                continue
+            ok, check = (True, False) if weekend_cutoff is None else weekend_back(b, weekend_cutoff)
+            if ok:
+                pairs.append(
+                    RoundTrip(o, b, _bus(ground, o.origin, b.destination), check_return=check)
+                )
     return sorted(pairs, key=lambda t: (t.total, t.out.departure))
 
 
@@ -122,7 +154,11 @@ def dedupe(fares: list[Fare]) -> list[Fare]:
 
 
 def bundled_roundtrips(
-    deals: list[Deal], origins: set[str], max_nights: int, ground: Ground
+    deals: list[Deal],
+    origins: set[str],
+    max_nights: int,
+    ground: Ground,
+    weekend_cutoff: time | None = None,
 ) -> list[RoundTrip]:
     """Bons plans datés (aller-retour à tarif unique) vus comme des aller-retours : le prix est
     porté par l'aller, le retour vaut 0. Hors origines ou hors `max_nights` : ignoré."""
@@ -138,13 +174,20 @@ def bundled_roundtrips(
         if not 0 <= (d.back - d.day).days <= max_nights:
             continue
         noon = datetime.combine(d.day, datetime.min.time())
-        out = Fare(
-            d.source, d.airline or d.source, d.origin, d.destination, noon, d.price, None, d.url
-        )
+        airline = d.airline or d.source
+        out = Fare(d.source, airline, d.origin, d.destination, noon, d.price, None, d.url,
+                   d.indicative)  # fmt: skip
         back_day = datetime.combine(d.back, datetime.min.time())
-        back = Fare(d.source, d.airline or d.source, d.destination, d.origin, back_day,
-                    Decimal(0), None, d.url, d.indicative)  # fmt: skip
-        trips.append(RoundTrip(out, back, _bus(ground, d.origin, d.origin), bundled=True))
+        back = Fare(d.source, airline, d.destination, d.origin, back_day, Decimal(0), None, d.url,
+                    d.indicative)  # fmt: skip
+        check = False
+        if weekend_cutoff is not None:
+            ok, check = weekend_back(back, weekend_cutoff)
+            if not (weekend_out(out) and ok):
+                continue
+        trips.append(
+            RoundTrip(out, back, _bus(ground, d.origin, d.origin), bundled=True, check_return=check)
+        )
     return trips
 
 

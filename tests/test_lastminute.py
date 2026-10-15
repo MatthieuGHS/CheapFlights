@@ -384,3 +384,49 @@ def test_aggregator_routes_are_verified_at_the_airline_and_replaced(monkeypatch)
     cal = r.calendars["KRK"]
     assert [(c.day.isoformat(), c.price) for c in cal.out] == [("2026-10-18", Decimal(19))]
     assert [(c.day.isoformat(), c.price) for c in cal.back] == [("2026-10-20", Decimal(17))]
+
+
+def _leg(o: str, d: str, day: str, price: str, hour: int = 8, arr: int | None = None) -> Fare:
+    f = fare(o, d, day, price, hour=hour)
+    if arr is None:
+        return f
+    return replace(f, arrival=datetime.fromisoformat(day) + timedelta(hours=arr))
+
+
+def test_weekend_rules_out_fri_sat_back_sun_or_monday_before_noon() -> None:
+    from datetime import time
+
+    cut = time(12, 0)
+    fri, sat, wed = (
+        _leg("VNO", "BGY", d, "20") for d in ("2026-11-06", "2026-11-07", "2026-11-04")
+    )
+    sun = _leg("BGY", "VNO", "2026-11-08", "10", hour=10, arr=13)
+    mon_early = _leg("BGY", "VNO", "2026-11-09", "10", hour=6, arr=10)
+    mon_late = _leg("BGY", "VNO", "2026-11-09", "10", hour=10, arr=13)
+    mon_day_only = _leg("BGY", "VNO", "2026-11-09", "10", hour=0)
+    tue = _leg("BGY", "VNO", "2026-11-10", "10")
+    got = roundtrips([fri, wed], [sun, mon_early, mon_late, mon_day_only, tue], 5, {}, cut)
+    assert {(t.out.day.weekday(), t.back.day.weekday(), t.check_return) for t in got} == {
+        (4, 6, False),
+        (4, 0, False),  # arrivée 10:00 < 12:00
+        (4, 0, True),  # jour seul : lundi accepté, heure à vérifier
+    }
+    assert len(got) == 3  # mercredi, lundi 13:00 et mardi écartés
+    assert [t.out.day.weekday() for t in roundtrips([sat], [sun], 3, {}, cut)] == [5]
+    assert roundtrips([wed], [sun], 5, {}, None)  # sans l'option : tout passe
+
+
+def test_weekend_bundled_deal_and_ryanair_windows() -> None:
+    from datetime import time
+
+    ok = Deal("kayak", "t", "VNO", "BGY", Decimal(40), "u", None, date(2026, 11, 6),
+              date(2026, 11, 9), "Ryanair")  # fmt: skip
+    bad = Deal("kayak", "t", "VNO", "ATH", Decimal(30), "u", None, date(2026, 11, 5),
+               date(2026, 11, 8), "Ryanair")  # fmt: skip
+    trips = bundled_roundtrips([ok, bad], {"VNO"}, 5, {}, time(12, 0))
+    assert [(t.out.destination, t.check_return) for t in trips] == [("BGY", True)]
+    assert run_mod._ry_windows(date(2026, 10, 14), date(2026, 11, 2), True) == [
+        (date(2026, 10, 16), date(2026, 10, 17)),
+        (date(2026, 10, 23), date(2026, 10, 24)),
+        (date(2026, 10, 30), date(2026, 10, 31)),
+    ]
