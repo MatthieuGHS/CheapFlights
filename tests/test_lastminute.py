@@ -432,9 +432,7 @@ def test_weekend_bundled_deal_and_ryanair_windows() -> None:
     ]
 
 
-def test_weekend_run_keeps_only_weekend_legs_in_oneways_including_fetched_returns(
-    monkeypatch,
-) -> None:  # type: ignore[no-untyped-def]
+def test_weekend_run_filters_fetched_returns(monkeypatch) -> None:  # type: ignore[no-untyped-def]
     cfg = load_config().lastminute.model_copy(
         update={"request_budget": 60, "pause_s": (0, 0), "weekend": True, "days": 14}
     )
