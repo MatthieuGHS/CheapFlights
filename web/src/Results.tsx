@@ -1,52 +1,61 @@
 import { useState } from 'react'
 import type { Bus, Calendar, Fare, Result, RoundTrip } from './api'
 
+const eur = new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' })
+const eur0 = new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 })
+
 const when = (f: Fare) => {
   const d = new Date(f.departure)
-  const day = d.toLocaleDateString('fr-FR', { weekday: 'short', day: '2-digit', month: '2-digit' })
+  const day = d.toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' })
   // les sources « au jour » (Wizz, Kayak) n'ont pas d'heure : minuit, on ne l'affiche pas
   return d.getHours() === 0 && d.getMinutes() === 0
     ? day
-    : `${day} ${d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}`
+    : `${day}, ${d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}`
 }
 
-const Badge = ({ indicative }: { indicative: boolean }) => (
+/** Seul le prix d'agrégateur est signalé : le prix lu chez la compagnie est la norme. */
+const Indicative = ({ source }: { source: string }) => (
   <span
-    className={`ml-1 rounded px-1.5 py-0.5 text-xs ${indicative ? 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-100' : 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-100'}`}
-    title={indicative ? "Prix d'un agrégateur, non vérifié chez la compagnie" : 'Prix lu chez la compagnie'}
+    className="rounded bg-warn-soft px-1.5 py-0.5 text-xs whitespace-nowrap text-warn"
+    title="Prix vu sur un agrégateur, pas encore vérifié chez la compagnie"
   >
-    {indicative ? 'prix indicatif' : 'vérifié'}
+    prix indicatif, {source}
   </span>
 )
 
-const Leg = ({ f }: { f: Fare }) => (
-  <span>
-    {f.origin}→{f.destination} · {when(f)} · {f.airline}{' '}
-    <span className="text-stone-500">[{f.source}]</span>
-    <Badge indicative={f.indicative} />
-    {f.url && (
-      <>
-        {' '}
-        <a href={f.url} target="_blank" rel="noreferrer" className="underline">
-          réserver
-        </a>
-      </>
-    )}
-  </span>
+const Book = ({ url }: { url: string | null }) =>
+  url ? (
+    <a href={url} target="_blank" rel="noreferrer" className="text-accent underline-offset-2 hover:underline">
+      Réserver
+    </a>
+  ) : null
+
+/** Une jambe alignée en colonnes : date, trajet, puis compagnie et lien (en dessous sur mobile). */
+const Leg = ({ f, note }: { f: Fare; note?: string }) => (
+  <div className="grid grid-cols-[1fr_auto] items-baseline gap-x-3 text-sm sm:grid-cols-[9.5rem_6.5rem_1fr]">
+    <span className="text-muted">{when(f)}</span>
+    <span>
+      {f.origin} → {f.destination}
+    </span>
+    <span className="col-span-2 flex flex-wrap items-center gap-x-2 gap-y-1 sm:col-span-1">
+      {note ?? f.airline}
+      {f.indicative && !note && <Indicative source={f.source} />}
+      {!note && (
+        <span className="ml-auto">
+          <Book url={f.url} />
+        </span>
+      )}
+    </span>
+  </div>
 )
 
 const total = (t: RoundTrip) => t.out.price + t.back.price // vols seulement
 const hours = (b: Bus) => `${Math.floor(b.minutes / 60)} h ${String(b.minutes % 60).padStart(2, '0')}`
-const BusInfo = ({ b }: { b: Bus }) =>
-  b.cost > 0 ? (
-    <span className="text-stone-500">
-      bus : {b.cost.toFixed(0)} € · {hours(b)} (hors total)
-    </span>
-  ) : null
+const busText = (b: Bus) => `Bus en plus : ${eur0.format(b.cost)}, ${hours(b)}`
 const nights = (t: RoundTrip) =>
   Math.round((Date.parse(t.back.departure.slice(0, 10)) - Date.parse(t.out.departure.slice(0, 10))) / 864e5)
 
-/** Prix par jour, aller (ligne du haut) et retour : le moins cher en vert. */
+/** Prix par jour, aller puis retour ; les jours proches du moins cher sont teintés. */
 function MiniCalendar({ cal }: { cal: Calendar }) {
   const cells = [...cal.out, ...cal.back]
   if (cells.length === 0) return null
@@ -55,184 +64,235 @@ function MiniCalendar({ cal }: { cal: Calendar }) {
   const start = new Date(sorted[0]!)
   const end = new Date(sorted.at(-1)!)
   for (let d = start; d <= end; d = new Date(d.getTime() + 864e5)) days.push(d.toISOString().slice(0, 10))
-  const cheapest = Math.min(...cells.map((c) => c.price))
-  const row = (label: string, list: Calendar['out']) => (
+  const row = (label: string, list: Calendar['out'], cheapest = Math.min(...list.map((c) => c.price))) => (
     <tr>
-      <th className="pr-2 text-left font-normal text-stone-500">{label}</th>
+      <th scope="row" className="pr-3 text-left font-normal text-muted">
+        {label}
+      </th>
       {days.map((d) => {
         const c = list.find((x) => x.day === d)
         const cheap = c !== undefined && c.price <= cheapest * 1.25
         return (
           <td
             key={d}
-            title={c ? `${c.origin} · ${c.indicative ? 'indicatif' : 'vérifié'}` : 'aucun vol'}
-            className={`px-1 text-center ${c ? (cheap ? 'bg-emerald-100 dark:bg-emerald-900' : '') : 'text-stone-300'} ${c?.indicative ? 'italic' : ''}`}
+            title={c ? `${c.origin}${c.indicative ? ', prix indicatif' : ''}` : 'Aucun vol'}
+            className={`min-w-9 px-1 py-0.5 text-center ${c ? (cheap ? 'bg-accent-soft font-medium text-accent' : '') : 'text-line'} ${c?.indicative ? 'italic' : ''}`}
           >
-            {c ? c.price.toFixed(0) : '·'}
+            {c ? Math.round(c.price) : '–'}
           </td>
         )
       })}
     </tr>
   )
   return (
-    <div className="mt-2 overflow-x-auto text-xs">
-      <table>
+    <div className="mt-3 overflow-x-auto text-xs">
+      <table className="border-separate border-spacing-0.5">
+        <caption className="sr-only">Prix par jour en euros</caption>
         <thead>
           <tr>
             <th />
             {days.map((d) => (
-              <th key={d} className="px-1 font-normal text-stone-500">
-                {d.slice(8)}
+              <th key={d} scope="col" className="px-1 font-normal text-muted">
+                {new Date(d).toLocaleDateString('fr-FR', { day: 'numeric' })}
               </th>
             ))}
           </tr>
         </thead>
         <tbody>
-          {row('aller', cal.out)}
-          {row('retour', cal.back)}
+          {row('Aller', cal.out)}
+          {row('Retour', cal.back)}
         </tbody>
       </table>
     </div>
   )
 }
 
-function Trip({ t }: { t: RoundTrip }) {
+function TripLegs({ t }: { t: RoundTrip }) {
   return (
-    <>
-      <strong>{total(t).toFixed(2)} €</strong> vols · {nights(t)} nuit{nights(t) > 1 ? 's' : ''}
-      <Badge indicative={t.out.indicative || t.back.indicative} />
-      {t.check_return && (
-        <span className="ml-1 rounded bg-sky-100 px-1.5 py-0.5 text-xs text-sky-800 dark:bg-sky-900 dark:text-sky-100">
-          heure de retour à vérifier
+    <div className="space-y-2 sm:space-y-1">
+      <Leg f={t.out} />
+      {t.bundled ? <Leg f={t.back} note="Inclus dans le tarif aller-retour" /> : <Leg f={t.back} />}
+      <p className="flex flex-wrap gap-x-4 text-xs text-muted">
+        <span>
+          {nights(t)} nuit{nights(t) > 1 ? 's' : ''}
         </span>
-      )}
-      <span className="ml-3 text-sm">
-        <BusInfo b={t.bus} />
-      </span>
-      <div className="text-sm">
-        <Leg f={t.out} />
-      </div>
-      <div className="text-sm">
-        {t.bundled ? (
-          <span className="text-stone-500">
-            retour {t.back.destination}→{t.back.origin} · {when(t.back)} (tarif aller-retour unique)
-          </span>
-        ) : (
-          <Leg f={t.back} />
-        )}
-      </div>
-    </>
+        {t.check_return && <span className="text-warn">Vérifiez l'heure d'arrivée du retour</span>}
+        {t.bus.cost > 0 && <span>{busText(t.bus)}</span>}
+      </p>
+    </div>
   )
 }
 
-type View = 'roundtrips' | 'oneways' | 'deals'
+function Trip({ t, others, cal }: { t: RoundTrip; others: RoundTrip[]; cal?: Calendar }) {
+  return (
+    <li className="grid grid-cols-[5.5rem_1fr] gap-x-4 py-5 sm:grid-cols-[7rem_4.5rem_1fr]">
+      <div className="text-xl font-semibold">{eur.format(total(t))}</div>
+      <div className="text-xl font-semibold tracking-wide text-accent sm:row-span-2">{t.out.destination}</div>
+      <div className="col-span-2 mt-2 sm:col-span-1 sm:col-start-3 sm:row-start-1 sm:mt-0">
+        <TripLegs t={t} />
+        {cal && <MiniCalendar cal={cal} />}
+        {others.length > 0 && (
+          <details className="mt-3 text-sm">
+            <summary className="cursor-pointer text-accent">
+              {others.length} autre{others.length > 1 ? 's' : ''} date{others.length > 1 ? 's' : ''}
+            </summary>
+            <ul className="mt-2 divide-y divide-line">
+              {others.map((a) => (
+                <li key={a.out.departure + a.back.departure + a.out.origin + a.out.source} className="flex gap-4 py-3">
+                  <span className="w-20 shrink-0 font-medium">{eur.format(total(a))}</span>
+                  <div className="min-w-0 flex-1">
+                    <TripLegs t={a} />
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </details>
+        )}
+      </div>
+    </li>
+  )
+}
+
+const VIEWS = [
+  ['roundtrips', 'Aller-retours'],
+  ['oneways', 'Allers simples'],
+  ['deals', 'Bons plans'],
+] as const
+type View = (typeof VIEWS)[number][0]
 
 export function Results({ result }: { result: Result }) {
   const [view, setView] = useState<View>('roundtrips')
-  const [allDates, setAllDates] = useState(false)
   const [maxPrice, setMaxPrice] = useState('')
   const limit = maxPrice === '' ? Infinity : Number(maxPrice)
   const oneways = result.oneways.filter((f) => f.price <= limit).sort((a, b) => a.price - b.price)
+  const counts: Record<View, number> = {
+    roundtrips: result.roundtrips.length,
+    oneways: result.oneways.length,
+    deals: result.deals.length,
+  }
+  const failed = Object.entries(result.sources).filter(([, s]) => s.error)
 
   return (
-    <section className="space-y-4">
-      <p className="text-sm text-stone-500">
-        {result.seconds.toFixed(0)} s · {result.requests} requêtes ·{' '}
-        {Object.entries(result.sources)
-          .map(([name, s]) => `${name}: ${s.error ? 'erreur' : `${s.fares} tarifs`}`)
-          .join(' · ')}
-      </p>
-      <nav role="tablist" className="flex gap-1 text-sm">
-        {(
-          [
-            ['roundtrips', `Aller-retours (${result.roundtrips.length})`],
-            ['oneways', `Allers simples (${result.oneways.length})`],
-            ['deals', `Bons plans (${result.deals.length})`],
-          ] as const
-        ).map(([key, label]) => (
+    <section className="mt-10">
+      <div className="flex flex-wrap items-baseline justify-between gap-2 text-sm text-muted">
+        <p>
+          Recherche faite en {result.seconds.toFixed(0)} s, {result.requests} requêtes.
+        </p>
+        <details className="text-right">
+          <summary className={`cursor-pointer ${failed.length ? 'text-warn' : ''}`}>
+            {failed.length ? `${failed.length} source${failed.length > 1 ? 's' : ''} en échec` : 'Détail des sources'}
+          </summary>
+          <ul className="mt-2 space-y-0.5 text-left">
+            {Object.entries(result.sources).map(([name, s]) => (
+              <li key={name} className="flex gap-3">
+                <span className="w-32 text-ink">{name}</span>
+                {s.error ? <span className="text-warn">{s.error}</span> : <span>{s.fares} tarifs</span>}
+              </li>
+            ))}
+          </ul>
+        </details>
+      </div>
+
+      <nav role="tablist" className="mt-4 flex gap-6 border-b border-line text-sm">
+        {VIEWS.map(([key, label]) => (
           <button
             key={key}
             role="tab"
             aria-selected={view === key}
             onClick={() => setView(key)}
-            className={`rounded px-3 py-1.5 ${view === key ? 'bg-stone-900 text-white dark:bg-stone-100 dark:text-stone-900' : 'hover:bg-stone-200 dark:hover:bg-stone-800'}`}
+            className={`-mb-px border-b-2 pb-2.5 ${view === key ? 'border-accent font-medium text-ink' : 'border-transparent text-muted hover:text-ink'}`}
           >
-            {label}
+            {label} <span className="text-muted">{counts[key]}</span>
           </button>
         ))}
       </nav>
 
       {view === 'roundtrips' && (
-        <div>
-          <label className="mb-2 block text-sm">
-            <input type="checkbox" checked={allDates} onChange={(e) => setAllDates(e.target.checked)} /> Toutes les
-            dates de chaque destination
-          </label>
-          <ul className="space-y-2">
-            {result.roundtrips.map((t) => (
-              <li key={t.out.destination} className="rounded border border-stone-300 p-3 dark:border-stone-700">
-                <Trip t={t} />
-                {result.calendars[t.out.destination] && (
-                  <MiniCalendar cal={result.calendars[t.out.destination]!} />
-                )}
-                {allDates && (result.alternatives[t.out.destination] ?? []).length > 1 && (
-                  <ul className="mt-2 space-y-1 border-t border-stone-200 pt-2 text-sm dark:border-stone-800">
-                    {result.alternatives[t.out.destination]!.slice(1).map((a) => (
-                      <li key={a.out.departure + a.back.departure + a.out.origin + a.out.source}>
-                        <Trip t={a} />
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </li>
-            ))}
-            {result.roundtrips.length === 0 && (
-              <li className="text-sm text-stone-500">Aucun aller-retour trouvé.</li>
-            )}
-          </ul>
-        </div>
+        <ul role="tabpanel" className="divide-y divide-line">
+          {result.roundtrips.map((t) => (
+            <Trip
+              key={t.out.destination}
+              t={t}
+              others={(result.alternatives[t.out.destination] ?? []).slice(1)}
+              cal={result.calendars[t.out.destination]}
+            />
+          ))}
+          {result.roundtrips.length === 0 && (
+            <li className="py-8 text-muted">
+              Aucun aller-retour dans cette fenêtre. Essayez plus de jours ou plus de nuits.
+            </li>
+          )}
+        </ul>
       )}
 
       {view === 'oneways' && (
-        <div>
-          <label className="mb-2 block text-sm">
-            Prix max (€){' '}
+        <div role="tabpanel" className="pt-4">
+          <label className="flex items-center gap-2 text-sm">
+            <span className="text-muted">Prix max</span>
             <input
               type="number"
               min={0}
               value={maxPrice}
               onChange={(e) => setMaxPrice(e.target.value)}
-              className="input ml-1 w-24"
-            />{' '}
-            <span className="text-stone-500">{oneways.length} vols</span>
+              className="input w-24"
+              placeholder="€"
+            />
+            <span className="text-muted">{oneways.length} vols</span>
           </label>
-          <ul className="space-y-1 text-sm">
-            {oneways.map((f) => (
-              <li key={f.source + f.origin + f.destination + f.departure + f.price}>
-                <strong>{f.price.toFixed(2)} €</strong> · <Leg f={f} />
-                {result.bus[f.origin] && (
-                  <span className="ml-3">
-                    <BusInfo b={result.bus[f.origin]!} />
-                  </span>
-                )}
-              </li>
-            ))}
-          </ul>
+          <div className="mt-3 overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="text-left text-muted">
+                <tr className="border-b border-line">
+                  <th className="py-2 pr-4 font-normal">Prix</th>
+                  <th className="py-2 pr-4 font-normal">Trajet</th>
+                  <th className="py-2 pr-4 font-normal">Départ</th>
+                  <th className="py-2 pr-4 font-normal">Compagnie</th>
+                  <th className="py-2 font-normal">
+                    <span className="sr-only">Lien</span>
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-line">
+                {oneways.map((f) => (
+                  <tr key={f.source + f.origin + f.destination + f.departure + f.price}>
+                    <td className="py-2 pr-4 font-medium whitespace-nowrap">{eur.format(f.price)}</td>
+                    <td className="py-2 pr-4 whitespace-nowrap">
+                      {f.origin} → {f.destination}
+                    </td>
+                    <td className="py-2 pr-4 whitespace-nowrap text-muted">{when(f)}</td>
+                    <td className="py-2 pr-4">
+                      <span className="flex flex-wrap items-center gap-2">
+                        {f.airline}
+                        {f.indicative && <Indicative source={f.source} />}
+                        {result.bus[f.origin] && <span className="text-xs text-muted">{busText(result.bus[f.origin]!)}</span>}
+                      </span>
+                    </td>
+                    <td className="py-2 text-right">
+                      <Book url={f.url} />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
 
       {view === 'deals' && (
-        <ul className="space-y-1 text-sm">
+        <ul role="tabpanel" className="divide-y divide-line text-sm">
           {result.deals.map((d, i) => (
-            <li key={i}>
-              <strong>{d.price.toFixed(0)} €</strong> <Badge indicative={d.indicative} /> · {d.origin}→
-              {d.destination} ·{' '}
-              <a href={d.url} target="_blank" rel="noreferrer" className="underline">
-                {d.source}
+            <li key={i} className="flex flex-wrap items-baseline gap-x-4 gap-y-1 py-3">
+              <span className="w-20 font-medium">{eur0.format(d.price)}</span>
+              <span className="w-28">
+                {d.origin} → {d.destination}
+              </span>
+              <span className="flex-1 text-muted">{d.when ?? 'Dates libres'}</span>
+              <a href={d.url} target="_blank" rel="noreferrer" className="text-accent underline-offset-2 hover:underline">
+                Voir sur {d.source}
               </a>
             </li>
           ))}
-          {result.deals.length === 0 && <li className="text-stone-500">Aucun bon plan sans date.</li>}
+          {result.deals.length === 0 && <li className="py-8 text-muted">Aucun bon plan sans date pour l'instant.</li>}
         </ul>
       )}
     </section>

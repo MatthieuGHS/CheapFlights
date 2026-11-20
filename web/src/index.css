@@ -2,11 +2,65 @@
 
 :root {
   color-scheme: light dark;
+  --paper: #f5f6f8;
+  --surface: #ffffff;
+  --ink: #18212b;
+  --muted: #66717f;
+  --line: #dce0e6;
+  --accent: #2f5d7c;
+  --accent-soft: #e3ecf2;
+  --warn: #8a5a00;
+  --warn-soft: #f6ecd6;
 }
+@media (prefers-color-scheme: dark) {
+  :root {
+    --paper: #14191f;
+    --surface: #1b2128;
+    --ink: #e6e9ed;
+    --muted: #949eab;
+    --line: #2c343e;
+    --accent: #8bb4d1;
+    --accent-soft: #23323f;
+    --warn: #e0b45c;
+    --warn-soft: #3a2f19;
+  }
+}
+
+@theme inline {
+  --font-sans: "Public Sans", ui-sans-serif, system-ui, sans-serif;
+  --color-paper: var(--paper);
+  --color-surface: var(--surface);
+  --color-ink: var(--ink);
+  --color-muted: var(--muted);
+  --color-line: var(--line);
+  --color-accent: var(--accent);
+  --color-accent-soft: var(--accent-soft);
+  --color-warn: var(--warn);
+  --color-warn-soft: var(--warn-soft);
+}
+
 body {
-  @apply bg-stone-50 text-stone-900 dark:bg-stone-950 dark:text-stone-100;
+  @apply bg-paper font-sans text-ink antialiased;
+  font-variant-numeric: tabular-nums;
 }
 
 .input {
-  @apply rounded border border-stone-300 bg-white px-2 py-1 dark:border-stone-700 dark:bg-stone-950;
+  @apply rounded-md border border-line bg-surface px-2.5 py-1.5 text-ink;
+}
+
+:focus-visible {
+  @apply outline-2 outline-offset-2 outline-accent;
+}
+
+@keyframes sweep {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(250%); }
+}
+.progress::after {
+  content: "";
+  @apply absolute inset-y-0 w-2/5 bg-accent;
+  animation: sweep 1.4s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .progress::after { animation: none; @apply w-full opacity-40; }
 }

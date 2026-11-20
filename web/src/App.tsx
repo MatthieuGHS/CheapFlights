@@ -2,6 +2,13 @@ import { useEffect, useState } from 'react'
 import { followSearch, getConfig, getSearch, startSearch, type Config, type SearchEvent, type Status } from './api'
 import { Results } from './Results'
 
+const Field = ({ label, children }: { label: string; children: React.ReactNode }) => (
+  <label className="flex flex-col gap-1 text-sm">
+    <span className="text-muted">{label}</span>
+    {children}
+  </label>
+)
+
 export default function App() {
   const [config, setConfig] = useState<Config | null>(null)
   const [days, setDays] = useState(10)
@@ -20,7 +27,7 @@ export default function App() {
         setConfig(c)
         setDays(c.days)
         setNights(c.max_nights)
-        setOrigins(c.origins.join(','))
+        setOrigins(c.origins.join(', '))
         setGoogle(c.google.enabled)
         setWeekend(c.weekend)
       })
@@ -47,50 +54,89 @@ export default function App() {
       .then((r) => setRunId(r.id))
       .catch((e: unknown) => setError(String(e)))
   }
+  const sources = events.filter((e) => e.type === 'source')
 
   return (
-    <div className="mx-auto max-w-4xl space-y-6 px-4 py-6">
-      <h1 className="text-2xl font-semibold tracking-tight">Cheap Hops · dernière minute</h1>
+    <div className="mx-auto max-w-4xl px-4 py-8 sm:py-12">
+      <header className="mb-8">
+        <h1 className="text-xl font-semibold tracking-tight">Cheap Hops</h1>
+        <p className="mt-1 text-muted">
+          Les vols les moins chers des prochains jours, vers n'importe où
+          {config && ` depuis ${config.origins.join(', ')}`}.
+        </p>
+      </header>
+
       <form
-        className="flex flex-wrap items-end gap-3 text-sm"
+        className="flex flex-wrap items-end gap-x-5 gap-y-4 border-y border-line py-5"
         onSubmit={(e) => {
           e.preventDefault()
           go()
         }}
       >
-        <label>
-          Départs de J+0 à J+
-          <input type="number" min={0} max={60} value={days} onChange={(e) => setDays(+e.target.value)} className="input ml-1 w-16" />
-        </label>
-        <label>
-          Nuits max
-          <input type="number" min={0} value={nights} onChange={(e) => setNights(+e.target.value)} className="input ml-1 w-16" />
-        </label>
-        <label>
-          Origines
-          <input value={origins} onChange={(e) => setOrigins(e.target.value)} className="input ml-1 w-40" />
-          {config && <span className="ml-1 text-stone-500">optionnels : {config.optional_origins.join(', ')}</span>}
-        </label>
-        <label>
-          <input type="checkbox" checked={weekend} onChange={(e) => setWeekend(e.target.checked)} /> Week-end
-          uniquement
-        </label>
-        <label>
-          <input type="checkbox" checked={google} onChange={(e) => setGoogle(e.target.checked)} /> Google Flights
-        </label>
-        <button disabled={running || !config} className="rounded bg-stone-900 px-4 py-1.5 text-white disabled:opacity-50 dark:bg-stone-100 dark:text-stone-900">
-          {running ? 'Recherche…' : 'Chercher'}
+        <Field label="Départ dans les (jours)">
+          <input type="number" min={0} max={60} value={days} onChange={(e) => setDays(+e.target.value)} className="input w-24" />
+        </Field>
+        <Field label="Nuits max">
+          <input type="number" min={0} value={nights} onChange={(e) => setNights(+e.target.value)} className="input w-20" />
+        </Field>
+        <Field label="Aéroports de départ">
+          <input
+            value={origins}
+            onChange={(e) => setOrigins(e.target.value)}
+            className="input w-48 uppercase"
+            aria-describedby="optional-origins"
+          />
+        </Field>
+        <fieldset className="flex flex-col gap-1.5 text-sm">
+          <legend className="sr-only">Options</legend>
+          <label className="flex items-center gap-2">
+            <input type="checkbox" checked={weekend} onChange={(e) => setWeekend(e.target.checked)} className="accent-accent" />
+            Week-end seulement
+          </label>
+          <label className="flex items-center gap-2">
+            <input type="checkbox" checked={google} onChange={(e) => setGoogle(e.target.checked)} className="accent-accent" />
+            Inclure Google Flights
+          </label>
+        </fieldset>
+        <button
+          disabled={running || !config}
+          className="ml-auto rounded-md bg-ink px-5 py-2 text-sm font-medium text-paper hover:opacity-90 disabled:opacity-40"
+        >
+          {running ? 'Recherche en cours' : 'Chercher des vols'}
         </button>
+        {config && (
+          <p id="optional-origins" className="w-full text-xs text-muted">
+            Aéroports voisins possibles, avec bus depuis chez vous : {config.optional_origins.join(', ')}.
+          </p>
+        )}
       </form>
-      {error && <p role="alert" className="text-red-600">{error}</p>}
-      {running && (
-        <ul className="text-sm text-stone-500">
-          {events.map((e, i) =>
-            e.type === 'source' ? <li key={i}>{`${e.source} : ${e.error ?? `${e.fares} tarifs`} (${e.requests} req)`}</li> : null,
-          )}
-        </ul>
+
+      {error && (
+        <p role="alert" className="mt-6 rounded-md bg-warn-soft px-4 py-3 text-sm text-warn">
+          {error}
+        </p>
       )}
-      {status?.error && <p role="alert" className="text-red-600">{status.error}</p>}
+
+      {running && (
+        <div className="mt-8" aria-live="polite">
+          <div className="progress relative h-0.5 overflow-hidden bg-line" />
+          <ul className="mt-4 space-y-1 text-sm text-muted">
+            {sources.map((e, i) => (
+              <li key={i} className="flex gap-3">
+                <span className="w-32 text-ink">{e.source}</span>
+                {e.error ? <span className="text-warn">en échec</span> : <span>{e.fares} tarifs, {e.requests} requêtes</span>}
+              </li>
+            ))}
+            {sources.length === 0 && <li>Interrogation des compagnies et des sites de bons plans…</li>}
+          </ul>
+        </div>
+      )}
+
+      {status?.error && (
+        <p role="alert" className="mt-6 rounded-md bg-warn-soft px-4 py-3 text-sm text-warn">
+          La recherche a échoué : {status.error}
+        </p>
+      )}
       {status?.result && <Results result={status.result} />}
     </div>
   )
