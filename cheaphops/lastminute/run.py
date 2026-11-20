@@ -19,7 +19,7 @@ from typing import Any
 from ryanair import Ryanair
 
 from cheaphops.core.config import Ground, LastMinute
-from cheaphops.lastminute import generic, sources
+from cheaphops.lastminute import airports, generic, sources
 from cheaphops.lastminute.fares import (
     Bus,
     Calendar,
@@ -69,6 +69,7 @@ class Result:
     periods: list[PeriodResult]
     deals: list[Deal]  # bons plans sans date
     bus: dict[str, Bus]  # bus depuis le domicile par aéroport d'origine (info)
+    cities: dict[str, str]  # code IATA -> ville, pour les aéroports affichés
     requests: int
     seconds: float
     sources: dict[str, SourceReport] = field(default_factory=dict)
@@ -440,11 +441,20 @@ async def run(
             {d: g for d, g in by_destination(trips, cfg.alternatives).items() if d in shown},
             {dest: calendar_for(dest, w_pool, origins) for dest in shown},
         ))  # fmt: skip
+    oneways = cheapest_oneways([*outs, *(backs if cutoff else [])], cfg.oneways_max)
+    legs = [
+        *oneways,
+        *(f for p in periods for g in p.alternatives.values() for t in g for f in (t.out, t.back)),
+    ]
+    codes = {c for f in legs for c in (f.origin, f.destination)}
+    codes |= {c for d in best_deals for c in (d.origin, d.destination)}
+    names = airports.cities()
     result = Result(
-        cheapest_oneways([*outs, *(backs if cutoff else [])], cfg.oneways_max),
+        oneways,
         periods,
         best_deals,
         bus,
+        {c: names[c] for c in codes if c in names},
         total,
         time.monotonic() - start,
         reports,

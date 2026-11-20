@@ -70,6 +70,7 @@ const Result = z.object({
     }),
   ),
   bus: z.record(z.string(), Bus),
+  cities: z.record(z.string(), z.string()), // code IATA -> ville ; absent : afficher le code
   requests: z.number(),
   seconds: z.number(),
   sources: z.record(

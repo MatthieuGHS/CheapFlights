@@ -541,6 +541,7 @@ def test_periods_keep_both_legs_in_the_same_range_and_bound_return_searches(monk
         [("2026-11-25", "2026-11-26", Decimal(28))],
         [("2026-12-03", "2026-12-05", Decimal(39))],
     ]
+    assert (r.cities["VNO"], r.cities["BGY"]) == ("Vilnius", "Milan")
     vno = {(lo.isoformat(), hi.isoformat()) for a, lo, hi in asked if a == "VNO"}
     assert vno == {("2026-11-20", "2026-11-26"), ("2026-12-02", "2026-12-06")}  # rien entre
     bgy = sorted(hi.isoformat() for a, _lo, hi in asked if a == "BGY")

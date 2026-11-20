@@ -1,6 +1,20 @@
-import { useState } from 'react'
+import { createContext, useContext, useState } from 'react'
 import type { Bus, Calendar, Fare, Result, RoundTrip } from './api'
 import { periodLabel } from './dates'
+
+const Cities = createContext<Record<string, string>>({})
+
+/** Ville, code IATA en retrait ; le code seul si la ville est inconnue (codes ville Kayak). */
+function Place({ code }: { code: string }) {
+  const city = useContext(Cities)[code]
+  return city ? (
+    <span title={code}>
+      {city} <span className="text-xs text-muted">{code}</span>
+    </span>
+  ) : (
+    <span>{code}</span>
+  )
+}
 
 const eur = new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' })
 const eur0 = new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 })
@@ -33,10 +47,10 @@ const Book = ({ url }: { url: string | null }) =>
 
 /** Une jambe alignée en colonnes : date, trajet, puis compagnie et lien (en dessous sur mobile). */
 const Leg = ({ f, note }: { f: Fare; note?: string }) => (
-  <div className="grid grid-cols-[1fr_auto] items-baseline gap-x-3 text-sm sm:grid-cols-[9.5rem_6.5rem_1fr]">
+  <div className="grid grid-cols-[1fr_auto] items-baseline gap-x-3 text-sm sm:grid-cols-[9.5rem_12rem_1fr]">
     <span className="text-muted">{when(f)}</span>
     <span>
-      {f.origin} → {f.destination}
+      <Place code={f.origin} /> → <Place code={f.destination} />
     </span>
     <span className="col-span-2 flex flex-wrap items-center gap-x-2 gap-y-1 sm:col-span-1">
       {note ?? f.airline}
@@ -124,11 +138,21 @@ function TripLegs({ t }: { t: RoundTrip }) {
   )
 }
 
+function Destination({ code }: { code: string }) {
+  const city = useContext(Cities)[code]
+  return (
+    <div className="sm:row-span-2">
+      <div className="text-xl leading-tight font-semibold text-accent">{city ?? code}</div>
+      {city && <div className="text-xs tracking-wide text-muted">{code}</div>}
+    </div>
+  )
+}
+
 function Trip({ t, others, cal }: { t: RoundTrip; others: RoundTrip[]; cal?: Calendar }) {
   return (
-    <li className="grid grid-cols-[5.5rem_1fr] gap-x-4 py-5 sm:grid-cols-[7rem_4.5rem_1fr]">
+    <li className="grid grid-cols-[5.5rem_1fr] gap-x-4 py-5 sm:grid-cols-[7rem_8rem_1fr]">
       <div className="text-xl font-semibold">{eur.format(total(t))}</div>
-      <div className="text-xl font-semibold tracking-wide text-accent sm:row-span-2">{t.out.destination}</div>
+      <Destination code={t.out.destination} />
       <div className="col-span-2 mt-2 sm:col-span-1 sm:col-start-3 sm:row-start-1 sm:mt-0">
         <TripLegs t={t} />
         {cal && <MiniCalendar cal={cal} />}
@@ -176,6 +200,7 @@ export function Results({ result }: { result: Result }) {
   const failed = Object.entries(result.sources).filter(([, s]) => s.error)
 
   return (
+    <Cities.Provider value={result.cities}>
     <section className="mt-10">
       <div className="flex flex-wrap items-baseline justify-between gap-2 text-sm text-muted">
         <p>
@@ -278,7 +303,7 @@ export function Results({ result }: { result: Result }) {
                   <tr key={f.source + f.origin + f.destination + f.departure + f.price}>
                     <td className="py-2 pr-4 font-medium whitespace-nowrap">{eur.format(f.price)}</td>
                     <td className="py-2 pr-4 whitespace-nowrap">
-                      {f.origin} → {f.destination}
+                      <Place code={f.origin} /> → <Place code={f.destination} />
                     </td>
                     <td className="py-2 pr-4 whitespace-nowrap text-muted">{when(f)}</td>
                     <td className="py-2 pr-4">
@@ -304,8 +329,8 @@ export function Results({ result }: { result: Result }) {
           {result.deals.map((d, i) => (
             <li key={i} className="flex flex-wrap items-baseline gap-x-4 gap-y-1 py-3">
               <span className="w-20 font-medium">{eur0.format(d.price)}</span>
-              <span className="w-28">
-                {d.origin} → {d.destination}
+              <span className="w-56">
+                <Place code={d.origin} /> → <Place code={d.destination} />
               </span>
               <span className="flex-1 text-muted">{d.when ?? 'Dates libres'}</span>
               <a href={d.url} target="_blank" rel="noreferrer" className="text-accent underline-offset-2 hover:underline">
@@ -317,5 +342,6 @@ export function Results({ result }: { result: Result }) {
         </ul>
       )}
     </section>
+    </Cities.Provider>
   )
 }
