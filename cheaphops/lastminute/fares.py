@@ -124,13 +124,15 @@ def roundtrips(
     retour, retour au plus `max_nights` nuits après l'aller. `outs` part des origines, `backs`
     arrive aux origines."""
     pairs = []
+    backs_from: dict[str, list[Fare]] = {}
+    for b in backs:
+        backs_from.setdefault(b.origin, []).append(b)
     for o in outs:
         if weekend_cutoff is not None and not weekend_out(o):
             continue
-        for b in backs:
+        for b in backs_from.get(o.destination, []):
             if not (
-                o.destination == b.origin
-                and 0 <= (b.day - o.day).days <= max_nights
+                0 <= (b.day - o.day).days <= max_nights
                 and (b.day > o.day or b.departure - o.departure >= SAME_DAY_GAP)
             ):
                 continue

@@ -460,3 +460,15 @@ def test_weekend_run_filters_fetched_returns(monkeypatch) -> None:  # type: igno
     days = {f.day.isoformat() for f in r.oneways}
     assert days == {"2026-10-16", "2026-10-18"}  # vendredi (aller) et dimanche (retour)
     assert [t.total for t in r.roundtrips] == [29]  # le mardi à 5 € est écarté
+
+
+def test_budget_plan_shrinks_google_then_wizz_and_farechart_covers_the_window() -> None:
+    cfg = load_config().lastminute
+    google = cfg.google.model_copy(update={"enabled": True, "destinations": ["WAW", "CPH"]})
+    cfg = cfg.model_copy(update={"google": google, "wizz_routes": 5, "request_budget": 60})
+    # 60 - 3 origines x 2 tranches - 25 réservées - 4 = 25 : Wizz 5, Google 2 dates x 2 x 3
+    assert run_mod._plan(cfg, slices=2, windows=1) == (5, ["WAW", "CPH"], 2)
+    assert run_mod._plan(cfg.model_copy(update={"request_budget": 45}), 2, 1) == (5, ["WAW"], 1)
+    assert run_mod._plan(cfg.model_copy(update={"request_budget": 10}), 2, 1) == (0, [], 1)
+    centers = sources.farechart_centers(date(2026, 10, 1), date(2026, 10, 20))
+    assert centers == [date(2026, 10, 10), date(2026, 10, 29)]  # ±9 j : 1-19 puis 20-38

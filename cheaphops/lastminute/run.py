@@ -64,7 +64,8 @@ class Result:
     sources: dict[str, SourceReport] = field(default_factory=dict)
 
 
-RESERVE_RETURNS = 20  # requêtes gardées pour les retours manquants
+RESERVE_STEP2 = 25  # requêtes laissées par l'étape 1 à la vérification et aux retours
+RESERVE_RETURNS = 20  # requêtes laissées par la vérification aux retours manquants
 # shortcut: le thread d'une source qui dépasse continue en fond (non tuable) ; la recherche,
 # elle, n'attend plus. Passer en annulation coopérative si une source bloque souvent.
 SOURCE_TIMEOUT_S = 300
@@ -154,6 +155,48 @@ def _in_window(d: Deal, d0: date, d1: date, cfg: LastMinute) -> bool:
     return d0 <= d.day <= d1 and nights_ok
 
 
+def _plan(cfg: LastMinute, slices: int, windows: int) -> tuple[int, list[str], int]:
+    """Budget de l'étape 1 : (routes Wizz, destinations Google, dates Google). Ryanair et Wizz
+    d'abord (leur coût est connu), Google prend ce qu'il reste ; les routes Wizz se réduisent si
+    la période est longue (`windows` farecharts par route)."""
+    n = len(cfg.origins)
+    room = cfg.request_budget - n * slices - RESERVE_STEP2 - (1 + n)
+    wizz_routes = max(min(cfg.wizz_routes, room // windows), 0)
+    g_dests, g_dates = cfg.google.destinations, cfg.google.dates
+    g_left = room - wizz_routes * windows if cfg.google.enabled else 0
+    while n * len(g_dests) * g_dates > g_left and g_dates > 1:
+        g_dates -= 1
+    return wizz_routes, g_dests[: max(g_left, 0) // max(n * g_dates, 1)], g_dates
+
+
+def _pick_verifications(
+    targets: dict[tuple[str, str, str], Decimal], left: int, limit: int, costs: dict[str, int]
+) -> dict[str, list[tuple[str, str]]]:
+    """Routes à vérifier par compagnie, les moins chères d'abord, dans `left` requêtes."""
+    todo: dict[str, list[tuple[str, str]]] = {"ryanair": [], "wizzair": []}
+    for (home, other, kind), _price in sorted(targets.items(), key=lambda kv: kv[1]):
+        if len(todo["ryanair"]) + len(todo["wizzair"]) >= limit or costs[kind] > left:
+            continue
+        todo[kind].append((home, other))
+        left -= costs[kind]
+    return todo
+
+
+def _missing_returns(
+    outs: list[Fare], backs: list[Fare], origins: set[str], limit: int
+) -> list[Fare]:
+    """Allers dont la destination n'a aucun retour connu, un par destination, les moins chers
+    d'abord. Wizz donne ses retours dans le farechart et un prix indicatif ne vaut pas une
+    requête : ceux-là sont exclus."""
+    covered = {b.origin for b in backs}
+    cheapest: dict[str, Fare] = {}
+    for f in sorted(outs, key=lambda f: f.price):
+        if f.destination not in origins and f.destination not in covered:
+            cheapest.setdefault(f.destination, f)
+    picks = [f for f in cheapest.values() if f.source != "wizzair" and not f.indicative]
+    return picks[: max(limit, 0)]
+
+
 def _sample(d0: date, d1: date, n: int) -> list[date]:
     span = (d1 - d0).days
     return sorted({d0 + timedelta(days=round(i * span / max(n - 1, 1))) for i in range(n)})
@@ -195,21 +238,10 @@ async def run(
               "error": rep.error})  # fmt: skip
         return items
 
-    # Budget : Ryanair et Wizz d'abord (leur coût est connu), Google prend ce qu'il reste en
-    # gardant de la place pour les retours ; les routes Wizz se réduisent si la période est longue
-    n = len(cfg.origins)
-    span = cfg.days + cfg.max_nights + 1
-    windows = -(-span // (2 * sources.FARECHART_RADIUS + 1))
+    last = d1 + timedelta(days=cfg.max_nights)
     ry_windows = _ry_windows(d0, d1, cfg.weekend)
-    slices = len(ry_windows)
-    returns = 25
-    room = cfg.request_budget - n * slices - returns - (1 + n)
-    wizz_routes = max(min(cfg.wizz_routes, room // windows), 0)
-    g_dests, g_dates = cfg.google.destinations, cfg.google.dates
-    g_left = room - wizz_routes * windows if cfg.google.enabled else 0
-    while n * len(g_dests) * g_dates > g_left and g_dates > 1:
-        g_dates -= 1
-    g_dests = g_dests[: max(g_left, 0) // max(n * g_dates, 1)]
+    windows = len(sources.farechart_centers(d0, last))
+    wizz_routes, g_dests, g_dates = _plan(cfg, len(ry_windows), windows)
 
     api = Ryanair(currency="EUR")
 
@@ -253,7 +285,6 @@ async def run(
             cfg.origins, g_dests, _sample(d0, d1, g_dates), pause) if g_dests else ([], 0)),
         web_all(),
     )  # fmt: skip
-    last = d1 + timedelta(days=cfg.max_nights)
     # VNO et KUN forment une zone MAC chez Wizz : un même vol sort des deux farecharts
     pool = [f for f in dedupe([*ry, *wz, *gg, *web_fares]) if d0 <= f.day <= last]
 
@@ -262,7 +293,6 @@ async def run(
     # fenêtre, dans les deux sens ; il remplace les prix de l'agrégateur.
     dated_deals = [d for d in deals if d.day is not None and d.back is not None]
     months = _months(d0, last)
-    ry_cost, wz_cost = 2 * len(months), windows + 1
     used = sum(r.requests for r in reports.values())
     if cfg.weekend:  # pas de requête de calendrier pour une route vue seulement un mardi
         pool_hint = [f for f in pool if not f.indicative or _weekend_leg(f, cfg)]
@@ -270,14 +300,10 @@ async def run(
     else:
         pool_hint, deal_hint = pool, dated_deals
     targets = _targets(pool_hint, deal_hint, origins)
-    todo: dict[str, list[tuple[str, str]]] = {"ryanair": [], "wizzair": []}
-    left = cfg.request_budget - used - RESERVE_RETURNS
-    for (home, other, kind), _price in sorted(targets.items(), key=lambda kv: kv[1]):
-        cost = ry_cost if kind == "ryanair" else wz_cost
-        if len(todo["ryanair"]) + len(todo["wizzair"]) >= cfg.verify_routes or cost > left:
-            continue
-        todo[kind].append((home, other))
-        left -= cost
+    costs = {"ryanair": 2 * len(months), "wizzair": windows + 1}
+    todo = _pick_verifications(
+        targets, cfg.request_budget - used - RESERVE_RETURNS, cfg.verify_routes, costs
+    )
     verified: set[tuple[str, str, str]] = set()
 
     def ry_verify() -> tuple[list[Fare], int]:
@@ -332,19 +358,10 @@ async def run(
             f.source if f.source in reports else f"web:{f.source}", SourceReport()
         ).in_window += 1
 
-    # Étape 2 : les retours manquants. Les allers simples de toutes les sources se combinent déjà
-    # entre eux ; il reste à chercher (Ryanair, 1 requête chacune) le retour des destinations sans
-    # aucun vol vers les origines dans le pool, les moins chères d'abord, dans ce que le budget
-    # permet. Wizz donne ses retours dans le farechart : ses destinations sont déjà couvertes.
-    covered = {b.origin for b in backs}
-    cheapest: dict[str, Fare] = {}
-    for f in sorted(outs, key=lambda f: f.price):
-        if f.destination not in origins and f.destination not in covered:
-            cheapest.setdefault(f.destination, f)
+    # Étape 2 : les allers simples de toutes les sources se combinent déjà entre eux ; il reste à
+    # chercher chez Ryanair (1 requête chacune) le retour des destinations qui n'en ont aucun.
     used = sum(r.requests for r in reports.values())
-    picks = [f for f in cheapest.values() if f.source != "wizzair" and not f.indicative][
-        : max(cfg.request_budget - used, 0)
-    ]
+    picks = _missing_returns(outs, backs, origins, cfg.request_budget - used)
     if picks:
         before = api.num_queries
 

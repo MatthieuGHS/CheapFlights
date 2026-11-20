@@ -87,6 +87,13 @@ def _ryanair_fare(x: dict[str, Any], o: str, d: str, flight_no: str | None = Non
     )  # fmt: skip
 
 
+def farechart_centers(d0: dt.date, last: dt.date) -> list[dt.date]:
+    """Dates demandées au farechart pour couvrir d0..last (chacune couvre ±FARECHART_RADIUS)."""
+    step = 2 * FARECHART_RADIUS + 1
+    return [d0 + dt.timedelta(days=FARECHART_RADIUS + i * step)
+            for i in range(-(-((last - d0).days + 1) // step))]  # fmt: skip
+
+
 def wizz(
     origins: list[str],
     d0: dt.date,
@@ -151,10 +158,7 @@ def wizz(
                 known[(o, f.destination)] = f.price
         cheapest = routes if routes is not None else sorted(known, key=lambda r: known[r])
         cheapest = cheapest[:max_routes]
-        center = d0 + dt.timedelta(days=FARECHART_RADIUS)
-        while cheapest and center - dt.timedelta(days=FARECHART_RADIUS) <= d1 + dt.timedelta(
-            nights
-        ):
+        for center in farechart_centers(d0, d1 + dt.timedelta(days=nights)) if cheapest else []:
             for o, d in cheapest:
                 stamp = f"{center.isoformat()}T00:00:00"
                 fc: dict[str, Any] = {
@@ -166,7 +170,6 @@ def wizz(
                     ],
                 }  # fmt: skip
                 fares.extend(parse_farechart(post(page, "/asset/farechart", fc), fx))
-            center += dt.timedelta(days=2 * FARECHART_RADIUS + 1)
         return page
 
     StealthyFetcher.fetch(
