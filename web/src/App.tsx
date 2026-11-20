@@ -43,7 +43,7 @@ export default function App() {
     setEvents([])
     setStatus(null)
     setError(null)
-    startSearch({ days, max_nights: nights, google, weekend, origins: origins.split(',').map((s) => s.trim().toUpperCase()) })
+    startSearch({ days, max_nights: nights, google, weekend, origins: origins.split(',').map((s) => s.trim().toUpperCase()).filter(Boolean) })
       .then((r) => setRunId(r.id))
       .catch((e: unknown) => setError(String(e)))
   }
@@ -60,15 +60,15 @@ export default function App() {
       >
         <label>
           Départs de J+0 à J+
-          <input type="number" min={0} max={60} value={days} onChange={(e) => setDays(+e.target.value)} className="ml-1 w-16 rounded border px-2 py-1" />
+          <input type="number" min={0} max={60} value={days} onChange={(e) => setDays(+e.target.value)} className="input ml-1 w-16" />
         </label>
         <label>
           Nuits max
-          <input type="number" min={0} value={nights} onChange={(e) => setNights(+e.target.value)} className="ml-1 w-16 rounded border px-2 py-1" />
+          <input type="number" min={0} value={nights} onChange={(e) => setNights(+e.target.value)} className="input ml-1 w-16" />
         </label>
         <label>
           Origines
-          <input value={origins} onChange={(e) => setOrigins(e.target.value)} className="ml-1 w-40 rounded border px-2 py-1" />
+          <input value={origins} onChange={(e) => setOrigins(e.target.value)} className="input ml-1 w-40" />
           {config && <span className="ml-1 text-stone-500">optionnels : {config.optional_origins.join(', ')}</span>}
         </label>
         <label>
@@ -82,15 +82,15 @@ export default function App() {
           {running ? 'Recherche…' : 'Chercher'}
         </button>
       </form>
-      {error && <p className="text-red-600">{error}</p>}
+      {error && <p role="alert" className="text-red-600">{error}</p>}
       {running && (
         <ul className="text-sm text-stone-500">
-          {events.map((e, i) => (
-            <li key={i}>{e.type === 'source' ? `${e.source} : ${e.error ?? `${e.fares} tarifs`} (${e.requests} req)` : null}</li>
-          ))}
+          {events.map((e, i) =>
+            e.type === 'source' ? <li key={i}>{`${e.source} : ${e.error ?? `${e.fares} tarifs`} (${e.requests} req)`}</li> : null,
+          )}
         </ul>
       )}
-      {status?.error && <p className="text-red-600">{status.error}</p>}
+      {status?.error && <p role="alert" className="text-red-600">{status.error}</p>}
       {status?.result && <Results result={status.result} />}
     </div>
   )

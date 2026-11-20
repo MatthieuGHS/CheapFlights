@@ -95,8 +95,8 @@ export type SearchEvent = z.infer<typeof SearchEvent>
 
 async function call<T>(schema: z.ZodType<T>, url: string, init?: RequestInit): Promise<T> {
   const r = await fetch(url, { headers: { 'content-type': 'application/json' }, ...init })
-  const body: unknown = await r.json()
-  if (!r.ok) throw new Error(`${r.status} ${JSON.stringify(body)}`)
+  const body: unknown = await r.json().catch(() => null) // un 500 peut renvoyer du texte
+  if (!r.ok) throw new Error(`${r.status} ${body === null ? r.statusText : JSON.stringify(body)}`)
   return schema.parse(body)
 }
 

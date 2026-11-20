@@ -51,8 +51,9 @@ function MiniCalendar({ cal }: { cal: Calendar }) {
   const cells = [...cal.out, ...cal.back]
   if (cells.length === 0) return null
   const days: string[] = []
-  const start = new Date(cells.map((c) => c.day).sort()[0]!)
-  const end = new Date(cells.map((c) => c.day).sort().at(-1)!)
+  const sorted = cells.map((c) => c.day).sort()
+  const start = new Date(sorted[0]!)
+  const end = new Date(sorted.at(-1)!)
   for (let d = start; d <= end; d = new Date(d.getTime() + 864e5)) days.push(d.toISOString().slice(0, 10))
   const cheapest = Math.min(...cells.map((c) => c.price))
   const row = (label: string, list: Calendar['out']) => (
@@ -141,7 +142,7 @@ export function Results({ result }: { result: Result }) {
           .map(([name, s]) => `${name}: ${s.error ? 'erreur' : `${s.fares} tarifs`}`)
           .join(' · ')}
       </p>
-      <nav className="flex gap-1 text-sm">
+      <nav role="tablist" className="flex gap-1 text-sm">
         {(
           [
             ['roundtrips', `Aller-retours (${result.roundtrips.length})`],
@@ -151,6 +152,8 @@ export function Results({ result }: { result: Result }) {
         ).map(([key, label]) => (
           <button
             key={key}
+            role="tab"
+            aria-selected={view === key}
             onClick={() => setView(key)}
             className={`rounded px-3 py-1.5 ${view === key ? 'bg-stone-900 text-white dark:bg-stone-100 dark:text-stone-900' : 'hover:bg-stone-200 dark:hover:bg-stone-800'}`}
           >
@@ -199,7 +202,7 @@ export function Results({ result }: { result: Result }) {
               min={0}
               value={maxPrice}
               onChange={(e) => setMaxPrice(e.target.value)}
-              className="ml-1 w-24 rounded border px-2 py-1"
+              className="input ml-1 w-24"
             />{' '}
             <span className="text-stone-500">{oneways.length} vols</span>
           </label>
@@ -220,8 +223,8 @@ export function Results({ result }: { result: Result }) {
 
       {view === 'deals' && (
         <ul className="space-y-1 text-sm">
-          {result.deals.map((d) => (
-            <li key={d.url}>
+          {result.deals.map((d, i) => (
+            <li key={i}>
               <strong>{d.price.toFixed(0)} €</strong> <Badge indicative={d.indicative} /> · {d.origin}→
               {d.destination} ·{' '}
               <a href={d.url} target="_blank" rel="noreferrer" className="underline">
