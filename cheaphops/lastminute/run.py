@@ -53,13 +53,22 @@ class SourceReport:
 
 
 @dataclass
-class Result:
-    oneways: list[Fare]
+class PeriodResult:
+    """Les aller-retours d'une plage : aller et retour y tombent tous les deux."""
+
+    start: date
+    end: date
     roundtrips: list[RoundTrip]  # la meilleure combinaison par destination
     alternatives: dict[str, list[RoundTrip]]  # toutes les dates des destinations affichées
+    calendars: dict[str, Calendar]  # prix par jour (aller et retour) des destinations affichées
+
+
+@dataclass
+class Result:
+    oneways: list[Fare]
+    periods: list[PeriodResult]
     deals: list[Deal]  # bons plans sans date
     bus: dict[str, Bus]  # bus depuis le domicile par aéroport d'origine (info)
-    calendars: dict[str, Calendar]  # prix par jour (aller et retour) des destinations affichées
     requests: int
     seconds: float
     sources: dict[str, SourceReport] = field(default_factory=dict)
@@ -126,25 +135,23 @@ def _targets(
     return found
 
 
-def _ry_windows(d0: date, d1: date, weekend: bool) -> list[tuple[date, date]]:
+def _out_days(windows: list[Window], weekend: bool) -> list[date]:
+    """Jours où un départ est possible, triés (vendredis et samedis seuls en mode week-end)."""
+    days = {w.start + timedelta(i) for w in windows for i in range((w.last_out - w.start).days + 1)}
+    return sorted(d for d in days if not weekend or d.weekday() in (4, 5))
+
+
+def _ry_windows(days: list[date]) -> list[tuple[date, date]]:
     """Plages interrogées sur oneWayFares (une requête par plage et par aéroport, le moins cher
-    par destination). Normal : tranches de 10 jours. Week-end : seulement les vendredis-samedis,
-    où un départ est possible."""
-    if not weekend:
-        step = sources.RYANAIR_SLICE_DAYS
-        return [
-            (d0 + timedelta(lo), min(d0 + timedelta(lo + step - 1), d1))
-            for lo in range(0, (d1 - d0).days + 1, step)
-        ]
-    days = [d0 + timedelta(i) for i in range((d1 - d0).days + 1)]
-    days = [d for d in days if d.weekday() in (4, 5)]
-    windows: list[tuple[date, date]] = []
+    par destination) : les jours de départ consécutifs, par tranches de 10 jours au plus."""
+    out: list[tuple[date, date]] = []
     for d in days:
-        if windows and windows[-1][1] == d - timedelta(1):
-            windows[-1] = (windows[-1][0], d)
+        lo, hi = out[-1] if out else (d, d)
+        if out and hi == d - timedelta(1) and (d - lo).days < sources.RYANAIR_SLICE_DAYS:
+            out[-1] = (lo, d)
         else:
-            windows.append((d, d))
-    return windows
+            out.append((d, d))
+    return out
 
 
 def _months(d0: date, last: date) -> list[date]:
@@ -159,12 +166,15 @@ def _weekend_leg(f: Fare, cfg: LastMinute) -> bool:
     return weekend_out(f) or weekend_back(f, cfg.weekend_return_before)[0]
 
 
-def _in_window(d: Deal, d0: date, d1: date, cfg: LastMinute) -> bool:
-    """Un bon plan daté part dans la fenêtre et revient en `max_nights` ; sans date, gardé."""
+def _in_window(d: Deal, windows: list[Window], cfg: LastMinute) -> bool:
+    """Un bon plan daté part dans une plage et y revient en `max_nights` ; sans date, gardé."""
     if d.day is None:
         return True
-    nights_ok = d.back is None or (d.back - d.day).days <= cfg.max_nights
-    return d0 <= d.day <= d1 and nights_ok
+    back, day = d.back, d.day
+    nights_ok = back is None or (back - day).days <= cfg.max_nights
+    return nights_ok and any(
+        w.allows_out(day) and (back is None or w.contains(back)) for w in windows
+    )
 
 
 def _plan(cfg: LastMinute, slices: int, windows: int) -> tuple[int, list[str], int]:
@@ -209,9 +219,10 @@ def _missing_returns(
     return picks[: max(limit, 0)]
 
 
-def _sample(d0: date, d1: date, n: int) -> list[date]:
-    span = (d1 - d0).days
-    return sorted({d0 + timedelta(days=round(i * span / max(n - 1, 1))) for i in range(n)})
+def _sample(days: list[date], n: int) -> list[date]:
+    """`n` jours répartis régulièrement parmi `days` (triés)."""
+    last = len(days) - 1
+    return sorted({days[round(i * last / max(n - 1, 1))] for i in range(n)}) if days else []
 
 
 async def run(
@@ -222,7 +233,10 @@ async def run(
     fx: Fx | None = None,
 ) -> Result:
     start = time.monotonic()
-    d0, d1 = today, today + timedelta(days=cfg.days)
+    windows = windows_for(cfg, today)
+    spans = [(w.start, w.end) for w in windows]
+    d0, last = windows[0].start, windows[-1].end  # enveloppe : les sources la couvrent
+    out_days = _out_days(windows, cfg.weekend)
     origins = set(cfg.origins)
     bus = {
         o: Bus(ground.buses[o].cost_eur, ground.buses[o].duration_min)
@@ -250,10 +264,9 @@ async def run(
               "error": rep.error})  # fmt: skip
         return items
 
-    last = d1 + timedelta(days=cfg.max_nights)
-    ry_windows = _ry_windows(d0, d1, cfg.weekend)
-    windows = len(sources.farechart_centers(d0, last))
-    wizz_routes, g_dests, g_dates = _plan(cfg, len(ry_windows), windows)
+    ry_windows = _ry_windows(out_days)
+    charts = sum(len(sources.farechart_centers(a, b)) for a, b in spans)
+    wizz_routes, g_dests, g_dates = _plan(cfg, len(ry_windows), charts)
 
     api = Ryanair(currency="EUR")
 
@@ -276,7 +289,7 @@ async def run(
 
             def one(src: generic.Source = src) -> tuple[list[Deal], int]:
                 got, fares, pages, mode = generic.run_source(
-                    src, rates, (d0, d1, cfg.max_nights, cfg.origins)
+                    src, rates, (d0, max(w.last_out for w in windows), cfg.max_nights, cfg.origins)
                 )
                 web_fares.extend(fares)
                 reports[f"web:{src.name}"].fares += len(fares)
@@ -286,25 +299,29 @@ async def run(
             got = await call(f"web:{src.name}", one)
             if src.name in modes:
                 reports[f"web:{src.name}"].mode = modes[src.name]
-            deals += [d for d in got if d.origin in origins and _in_window(d, d0, d1, cfg)]
+            deals += [d for d in got if d.origin in origins and _in_window(d, windows, cfg)]
         return deals
 
     ry, wz, gg, deals = await asyncio.gather(
         call("ryanair", ry_out),
         call("wizzair", lambda: sources.wizz(
-            cfg.origins, d0, d1, cfg.max_nights, wizz_routes, pause, rates)),
+            cfg.origins, spans, wizz_routes, pause, rates)),
         call("google", lambda: sources.google(
-            cfg.origins, g_dests, _sample(d0, d1, g_dates), pause) if g_dests else ([], 0)),
+            cfg.origins, g_dests, _sample(out_days, g_dates), pause) if g_dests else ([], 0)),
         web_all(),
     )  # fmt: skip
+
     # VNO et KUN forment une zone MAC chez Wizz : un même vol sort des deux farecharts
-    pool = [f for f in dedupe([*ry, *wz, *gg, *web_fares]) if d0 <= f.day <= last]
+    def in_windows(f: Fare) -> bool:
+        return any(w.contains(f.day) for w in windows)
+
+    pool = [f for f in dedupe([*ry, *wz, *gg, *web_fares]) if in_windows(f)]
 
     # Vérification : les agrégateurs découvrent des routes, le prix vient de la compagnie.
     # Pour chaque route Ryanair ou Wizz trouvée par un agrégateur, calendrier réel sur toute la
     # fenêtre, dans les deux sens ; il remplace les prix de l'agrégateur.
     dated_deals = [d for d in deals if d.day is not None and d.back is not None]
-    months = _months(d0, last)
+    months = sorted({m for a, b in spans for m in _months(a, b)})
     used = sum(r.requests for r in reports.values())
     if cfg.weekend:  # pas de requête de calendrier pour une route vue seulement un mardi
         pool_hint = [f for f in pool if not f.indicative or _weekend_leg(f, cfg)]
@@ -312,7 +329,7 @@ async def run(
     else:
         pool_hint, deal_hint = pool, dated_deals
     targets = _targets(pool_hint, deal_hint, origins)
-    costs = {"ryanair": 2 * len(months), "wizzair": windows + 1}
+    costs = {"ryanair": 2 * len(months), "wizzair": charts + 1}
     todo = _pick_verifications(
         targets, cfg.request_budget - used - RESERVE_RETURNS, cfg.verify_routes, costs
     )
@@ -335,9 +352,7 @@ async def run(
 
     def wz_verify() -> tuple[list[Fare], int]:
         routes = todo["wizzair"]
-        got, sent = sources.wizz(
-            cfg.origins, d0, d1, cfg.max_nights, len(routes), pause, rates, routes
-        )
+        got, sent = sources.wizz(cfg.origins, spans, len(routes), pause, rates, routes)
         # une réponse bloquée (403, 429) ne renvoie rien : la route reste indicative
         verified.update(r for f in got if (r := _route(f, origins, "wizzair")))
         return got, sent
@@ -358,8 +373,8 @@ async def run(
             if not ((k := _kind(d.airline or "")) and _deal_route(d, k) in verified)
         ]
         pool = dedupe([*pool, *vr, *vw])
-        pool = [f for f in pool if d0 <= f.day <= last]
-    outs = [f for f in pool if f.origin in origins and f.day <= d1]
+        pool = [f for f in pool if in_windows(f)]
+    outs = [f for f in pool if f.origin in origins and any(w.allows_out(f.day) for w in windows)]
     backs = [f for f in pool if f.destination in origins]
     cutoff = cfg.weekend_return_before if cfg.weekend else None
     if cutoff is not None:
@@ -373,7 +388,14 @@ async def run(
     # Étape 2 : les allers simples de toutes les sources se combinent déjà entre eux ; il reste à
     # chercher chez Ryanair (1 requête chacune) le retour des destinations qui n'en ont aucun.
     used = sum(r.requests for r in reports.values())
-    picks = _missing_returns(outs, backs, origins, cfg.request_budget - used)
+    picks: list[Fare] = []
+    for w in windows:  # une même destination peut manquer de retour dans chaque plage
+        picks += _missing_returns(
+            [f for f in outs if w.allows_out(f.day)],
+            [b for b in backs if w.contains(b.day)],
+            origins,
+            cfg.request_budget - used - len(picks),
+        )
     if picks:
         before = api.num_queries
 
@@ -382,7 +404,8 @@ async def run(
             for i, p in enumerate(picks):
                 if i:
                     pause()
-                span = p.day + timedelta(days=cfg.max_nights)
+                end = next(w.end for w in windows if w.allows_out(p.day))
+                span = min(p.day + timedelta(days=cfg.max_nights), end)
                 fares += [x for x in sources.ryanair(api, p.destination, p.day, span)
                           if x.destination in origins]  # fmt: skip
             return fares, api.num_queries - before
@@ -396,23 +419,32 @@ async def run(
         (d.origin, d.destination, d.price): d for d in deals if d.day is None or d.back is None
     }
     best_deals = sorted(undated.values(), key=lambda d: d.price)[: cfg.top]
-    trips = roundtrips(outs, backs, cfg.max_nights, bus, cutoff)
-    trips += bundled_roundtrips(dated_deals, origins, cfg.max_nights, bus, cutoff)
-    ranked = best_per_destination(trips)[: cfg.top]
-    shown = {t.out.destination for t in ranked}
-    calendars = {dest: calendar_for(dest, pool, origins) for dest in shown}
-    alternatives = {
-        dest: group
-        for dest, group in by_destination(trips, cfg.alternatives).items()
-        if dest in shown
-    }
+    periods = []
+    for w in windows:  # aller et retour dans la même plage
+        trips = roundtrips(
+            [f for f in outs if w.allows_out(f.day)],
+            [b for b in backs if w.contains(b.day)],
+            cfg.max_nights, bus, cutoff,
+        )  # fmt: skip
+        in_w = [
+            d
+            for d in dated_deals
+            if d.day and d.back and w.allows_out(d.day) and w.contains(d.back)
+        ]
+        trips += bundled_roundtrips(in_w, origins, cfg.max_nights, bus, cutoff)
+        ranked = best_per_destination(trips)[: cfg.top]
+        shown = {t.out.destination for t in ranked}
+        w_pool = [f for f in pool if w.contains(f.day)]
+        periods.append(PeriodResult(
+            w.start, w.end, ranked,
+            {d: g for d, g in by_destination(trips, cfg.alternatives).items() if d in shown},
+            {dest: calendar_for(dest, w_pool, origins) for dest in shown},
+        ))  # fmt: skip
     result = Result(
         cheapest_oneways([*outs, *(backs if cutoff else [])], cfg.oneways_max),
-        ranked,
-        alternatives,
+        periods,
         best_deals,
         bus,
-        calendars,
         total,
         time.monotonic() - start,
         reports,

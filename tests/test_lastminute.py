@@ -14,6 +14,7 @@ from cheaphops.lastminute.fares import (
     Bus,
     Deal,
     Fare,
+    Window,
     best_per_destination,
     bundled_roundtrips,
     by_destination,
@@ -254,11 +255,11 @@ def test_run_pairs_all_sources_and_only_fetches_missing_returns(monkeypatch) -> 
     r = asyncio.run(run_mod.run(cfg, ground, date(2026, 10, 14), fx=FX))
     assert queried == ["ATH"]
     assert r.requests <= 40
-    assert [(t.out.destination, t.total) for t in r.roundtrips] == [
+    assert [(t.out.destination, t.total) for t in r.periods[0].roundtrips] == [
         ("BGY", Decimal(29)),
         ("ATH", Decimal(57)),
     ]
-    assert set(r.alternatives) == {"BGY", "ATH"}
+    assert set(r.periods[0].alternatives) == {"BGY", "ATH"}
 
 
 def test_teztour_fixture_yields_dated_oneway_charters() -> None:
@@ -384,13 +385,13 @@ def test_aggregator_routes_are_verified_at_the_airline_and_replaced(monkeypatch)
 
     r = asyncio.run(run_mod.run(cfg, ground, date(2026, 10, 14), fx=FX))
     assert asked == [("VNO", "KRK"), ("KRK", "VNO")]  # les deux sens, Norwegian ignorée
-    krk = next(t for t in r.roundtrips if t.out.destination == "KRK")
+    krk = next(t for t in r.periods[0].roundtrips if t.out.destination == "KRK")
     assert (krk.total, krk.indicative) == (Decimal(36), False)  # 19 + 17 réels, pas 60
     assert not any(f.price == 60 for f in r.oneways)
     osl = next(f for f in r.oneways if f.destination == "OSL")
     assert osl.indicative  # non vérifiable : conservé, badge indicatif
     assert any(f.destination == "BUD" and f.indicative for f in r.oneways)
-    cal = r.calendars["KRK"]
+    cal = r.periods[0].calendars["KRK"]
     assert [(c.day.isoformat(), c.price) for c in cal.out] == [("2026-10-18", Decimal(19))]
     assert [(c.day.isoformat(), c.price) for c in cal.back] == [("2026-10-20", Decimal(17))]
 
@@ -434,7 +435,8 @@ def test_weekend_bundled_deal_and_ryanair_windows() -> None:
                date(2026, 11, 8), "Ryanair")  # fmt: skip
     trips = bundled_roundtrips([ok, bad], {"VNO"}, 5, {}, time(12, 0))
     assert [(t.out.destination, t.check_return) for t in trips] == [("BGY", True)]
-    assert run_mod._ry_windows(date(2026, 10, 14), date(2026, 11, 2), True) == [
+    window = Window(date(2026, 10, 14), date(2026, 11, 5), date(2026, 11, 2))
+    assert run_mod._ry_windows(run_mod._out_days([window], weekend=True)) == [
         (date(2026, 10, 16), date(2026, 10, 17)),
         (date(2026, 10, 23), date(2026, 10, 24)),
         (date(2026, 10, 30), date(2026, 10, 31)),
@@ -462,7 +464,7 @@ def test_weekend_run_filters_fetched_returns(monkeypatch) -> None:  # type: igno
     r = asyncio.run(run_mod.run(cfg, ground, date(2026, 10, 14), fx=FX))
     days = {f.day.isoformat() for f in r.oneways}
     assert days == {"2026-10-16", "2026-10-18"}  # vendredi (aller) et dimanche (retour)
-    assert [t.total for t in r.roundtrips] == [29]  # le mardi à 5 € est écarté
+    assert [t.total for t in r.periods[0].roundtrips] == [29]  # le mardi à 5 € est écarté
 
 
 def test_budget_plan_shrinks_google_then_wizz_and_farechart_covers_the_window() -> None:
@@ -504,3 +506,44 @@ def test_periods_merge_when_touching_and_windows_follow_the_mode() -> None:
             run_mod.windows_for(with_overrides(base, {"periods": [bad]}), today)
     with pytest.raises(ValueError):
         with_overrides(base, {"periods": [{"start": "2026-12-02", "end": "2026-12-01"}]})
+
+
+def test_periods_keep_both_legs_in_the_same_range_and_bound_return_searches(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    from cheaphops.core.config import with_overrides
+
+    cfg = with_overrides(load_config().lastminute, {"pause_s": (0, 0), "periods": [
+        {"start": "2026-11-20", "end": "2026-11-26"}, {"start": "2026-12-02", "end": "2026-12-06"},
+    ]})  # fmt: skip
+    asked: list[tuple[str, date, date]] = []
+    backs = [fare("BGY", "VNO", d, p) for d, p in
+             (("2026-11-26", "8"), ("2026-11-28", "1"), ("2026-12-05", "9"))]  # fmt: skip
+
+    def fake_ry(api, airport, d0, d1):  # type: ignore[no-untyped-def]
+        api.num_queries += 1
+        asked.append((airport, d0, d1))
+        if airport == "VNO":
+            outs = [fare("VNO", "BGY", "2026-11-25", "20"), fare("VNO", "BGY", "2026-12-03", "30")]
+            return [f for f in outs if d0 <= f.day <= d1]
+        return [f for f in backs if d0 <= f.day <= d1] if airport == "BGY" else []
+
+    monkeypatch.setattr(sources, "ryanair", fake_ry)
+    monkeypatch.setattr(sources, "wizz", lambda *a, **k: ([], 1))
+    monkeypatch.setattr(generic, "load_sources", lambda: [])
+    monkeypatch.setattr(run_mod, "Ryanair", lambda currency: SimpleNamespace(num_queries=0))
+    ground = Ground.model_validate({"home": "VNO", "buses": {}})
+
+    r = asyncio.run(run_mod.run(cfg, ground, date(2026, 11, 20), fx=FX))
+    got = [[(t.out.day.isoformat(), t.back.day.isoformat(), t.total) for t in p.roundtrips]
+           for p in r.periods]  # fmt: skip
+    assert got == [
+        [("2026-11-25", "2026-11-26", Decimal(28))],
+        [("2026-12-03", "2026-12-05", Decimal(39))],
+    ]
+    vno = {(lo.isoformat(), hi.isoformat()) for a, lo, hi in asked if a == "VNO"}
+    assert vno == {("2026-11-20", "2026-11-26"), ("2026-12-02", "2026-12-06")}  # rien entre
+    bgy = sorted(hi.isoformat() for a, _lo, hi in asked if a == "BGY")
+    assert bgy == ["2026-11-26", "2026-12-06"]  # retours bornés par la fin de chaque plage
+    assert run_mod._ry_windows(run_mod._out_days(
+        [Window(date(2026, 11, 1), date(2026, 11, 25), date(2026, 11, 22))], weekend=False
+    )) == [(date(2026, 11, 1), date(2026, 11, 10)), (date(2026, 11, 11), date(2026, 11, 20)),
+           (date(2026, 11, 21), date(2026, 11, 22))]  # fmt: skip

@@ -27,15 +27,19 @@ def render(r: Result, top: int = 10, all_dates: bool = False) -> str:
             f"  {name}: {state}, {s.fares} tarifs ({s.in_window} dans la fenêtre), "
             f"{s.requests} req, {s.seconds:.0f} s"
         )
-    lines.append(f"Top {top} aller-retours (une ligne par destination) :")
-    for t in r.roundtrips[:top] or []:
-        lines.append(_trip(t))
-        if all_dates:
-            lines += [
-                f"      {_trip(x).strip()}" for x in r.alternatives.get(t.out.destination, [])[1:]
-            ]
-    if not r.roundtrips:
-        lines.append("  (aucun)")
+    for p in r.periods:
+        lines.append(
+            f"Top {top} aller-retours du {p.start:%d/%m} au {p.end:%d/%m} (un par destination) :"
+        )
+        for t in p.roundtrips[:top]:
+            lines.append(_trip(t))
+            if all_dates:
+                lines += [
+                    f"      {_trip(x).strip()}"
+                    for x in p.alternatives.get(t.out.destination, [])[1:]
+                ]
+        if not p.roundtrips:
+            lines.append("  (aucun)")
     lines.append(f"Top {top} allers simples (meilleure date par route) :")
     lines += [f"  {_fare(f)}" for f in best_per_route(r.oneways)[:top]]
     if r.deals:

@@ -96,9 +96,7 @@ def farechart_centers(d0: dt.date, last: dt.date) -> list[dt.date]:
 
 def wizz(
     origins: list[str],
-    d0: dt.date,
-    d1: dt.date,
-    nights: int,
+    spans: list[tuple[dt.date, dt.date]],
     max_routes: int,
     pause: Pause,
     fx: Fx,
@@ -158,7 +156,8 @@ def wizz(
                 known[(o, f.destination)] = f.price
         cheapest = routes if routes is not None else sorted(known, key=lambda r: known[r])
         cheapest = cheapest[:max_routes]
-        for center in farechart_centers(d0, d1 + dt.timedelta(days=nights)) if cheapest else []:
+        centers = [c for a, b in spans for c in farechart_centers(a, b)]
+        for center in centers if cheapest else []:
             for o, d in cheapest:
                 stamp = f"{center.isoformat()}T00:00:00"
                 fc: dict[str, Any] = {
@@ -175,8 +174,7 @@ def wizz(
     StealthyFetcher.fetch(
         WIZZ_HOME, headless=True, network_idle=True, page_action=act, timeout=120_000
     )
-    last = d1 + dt.timedelta(days=nights)
-    return [f for f in fares if d0 <= f.day <= last], sent[0]
+    return [f for f in fares if any(a <= f.day <= b for a, b in spans)], sent[0]
 
 
 def _wizz_url(o: str, d: str, day: str) -> str:
