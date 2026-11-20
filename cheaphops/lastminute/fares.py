@@ -21,6 +21,22 @@ Buses = dict[str, Bus]  # aéroport -> bus depuis le domicile
 
 
 @dataclass(frozen=True)
+class Window:
+    """Plage de recherche : départ de `start` à `last_out`, retour au plus tard le `end`. Un
+    aller-retour tient dans une seule plage."""
+
+    start: date
+    end: date
+    last_out: date
+
+    def allows_out(self, day: date) -> bool:
+        return self.start <= day <= self.last_out
+
+    def contains(self, day: date) -> bool:
+        return self.start <= day <= self.end
+
+
+@dataclass(frozen=True)
 class Fare:
     source: str  # ryanair | wizzair | google
     airline: str

@@ -25,7 +25,7 @@ from cheaphops.core.config import (
     load_ground,
     with_overrides,
 )
-from cheaphops.lastminute.run import Emit, Result, run
+from cheaphops.lastminute.run import Emit, Result, run, windows_for
 
 KEPT_RUNS = 20  # recherches gardées en mémoire, les plus anciennes oubliées
 log = logging.getLogger("cheaphops.api")
@@ -35,6 +35,7 @@ WEB_DIST = ROOT / "web" / "dist"
 
 class SearchRequest(BaseModel):
     days: int | None = None
+    periods: list[dict[str, date]] | None = None  # [] : retour au mode « J+0 à J+days »
     origins: list[str] | None = None
     max_nights: int | None = None
     google: bool | None = None
@@ -90,8 +91,11 @@ def create_app(
             update["google"] = {"enabled": update["google"]}
         try:
             params = with_overrides(base, update)
+            windows_for(params, today())
         except ValidationError as e:
             raise HTTPException(422, json.loads(e.json())) from e
+        except ValueError as e:
+            raise HTTPException(422, str(e)) from e
         r = Run(uuid.uuid4().hex[:12], params)
         runs[r.id] = r
         while len(runs) > KEPT_RUNS:

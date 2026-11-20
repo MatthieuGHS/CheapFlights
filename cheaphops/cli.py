@@ -10,7 +10,7 @@ from pydantic import ValidationError
 from cheaphops.core.config import load_config, load_ground, with_overrides
 from cheaphops.core.log import setup_logging
 from cheaphops.lastminute.fares import Fare, RoundTrip, best_per_route
-from cheaphops.lastminute.run import Result, run
+from cheaphops.lastminute.run import Result, run, windows_for
 
 
 def _fare(f: Fare) -> str:
@@ -76,6 +76,9 @@ def main(argv: list[str] | None = None) -> int:
     s.add_argument(
         "--all-dates", action="store_true", help="toutes les dates de chaque destination"
     )
+    s.add_argument(
+        "--dates", help="plages précises, ex. 2026-11-20:2026-11-26,2026-12-30:2027-01-02"
+    )
     s.add_argument("--origins", help="ex. VNO,KUN,RIX,WAW (optionnels : WAW, GDN, TLL)")
     srv = sub.add_parser("serve", help="API + interface web sur http://127.0.0.1:PORT")
     srv.add_argument("--port", type=int, default=8000)
@@ -91,17 +94,21 @@ def main(argv: list[str] | None = None) -> int:
         uvicorn.run(create_app(), host="127.0.0.1", port=args.port)  # local uniquement
         return 0
 
-    update = {
-        "days": args.days,
-        "origins": [o.strip().upper() for o in args.origins.split(",") if o.strip()] or None
-        if args.origins
-        else None,
-        "weekend": True if args.weekend else None,
-        "google": {"enabled": True} if args.google else None,
-    }
     try:
+        update = {
+            "days": args.days,
+            "origins": [o.strip().upper() for o in args.origins.split(",") if o.strip()] or None
+            if args.origins
+            else None,
+            "weekend": True if args.weekend else None,
+            "google": {"enabled": True} if args.google else None,
+            # « 2026-12-25 » seul : une plage d'un jour
+            "periods": [dict(zip(("start", "end"), (p.split(":") * 2)[:2], strict=True))
+                        for p in args.dates.split(",")] if args.dates else None,
+        }  # fmt: skip
         lm = with_overrides(config.lastminute, {k: v for k, v in update.items() if v is not None})
-    except ValidationError as e:
+        windows_for(lm, date.today())
+    except (ValidationError, ValueError) as e:
         ap.error(str(e))
     result = asyncio.run(run(lm, load_ground(), date.today(), lambda e: print(e, file=sys.stderr)))
     print(render(result, all_dates=args.all_dates))

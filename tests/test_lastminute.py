@@ -5,6 +5,8 @@ from datetime import date, datetime, timedelta
 from decimal import Decimal
 from types import SimpleNamespace
 
+import pytest
+
 from cheaphops.core.config import Ground, load_config
 from cheaphops.lastminute import generic, sources
 from cheaphops.lastminute import run as run_mod
@@ -473,3 +475,32 @@ def test_budget_plan_shrinks_google_then_wizz_and_farechart_covers_the_window() 
     assert run_mod._plan(cfg.model_copy(update={"request_budget": 10}), 2, 1) == (0, [], 1)
     centers = sources.farechart_centers(date(2026, 10, 1), date(2026, 10, 20))
     assert centers == [date(2026, 10, 10), date(2026, 10, 29)]  # ±9 j : 1-19 puis 20-38
+
+
+def test_periods_merge_when_touching_and_windows_follow_the_mode() -> None:
+    from cheaphops.core.config import with_overrides
+    from cheaphops.lastminute.fares import Window
+
+    base = load_config().lastminute
+    cfg = with_overrides(base, {"periods": [
+        {"start": "2026-12-30", "end": "2027-01-02"},
+        {"start": "2026-11-20", "end": "2026-11-26"},
+        {"start": "2026-11-27", "end": "2026-11-28"},  # contiguë : fusionnée avec la précédente
+    ]})  # fmt: skip
+    today = date(2026, 11, 20)
+    assert run_mod.windows_for(cfg, today) == [
+        Window(date(2026, 11, 20), date(2026, 11, 28), date(2026, 11, 28)),
+        Window(date(2026, 12, 30), date(2027, 1, 2), date(2027, 1, 2)),
+    ]
+    days_mode = base.model_copy(update={"days": 10, "max_nights": 3})
+    assert run_mod.windows_for(days_mode, today) == [
+        Window(today, date(2026, 12, 3), date(2026, 11, 30))  # retour jusqu'à J+10+3
+    ]
+    for bad in (
+        {"start": "2026-11-19", "end": "2026-11-22"},
+        {"start": "2027-01-10", "end": "2027-01-25"},
+    ):
+        with pytest.raises(ValueError):
+            run_mod.windows_for(with_overrides(base, {"periods": [bad]}), today)
+    with pytest.raises(ValueError):
+        with_overrides(base, {"periods": [{"start": "2026-12-02", "end": "2026-12-01"}]})

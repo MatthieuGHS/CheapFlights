@@ -26,6 +26,7 @@ from cheaphops.lastminute.fares import (
     Deal,
     Fare,
     RoundTrip,
+    Window,
     best_per_destination,
     bundled_roundtrips,
     by_destination,
@@ -64,6 +65,7 @@ class Result:
     sources: dict[str, SourceReport] = field(default_factory=dict)
 
 
+HORIZON_DAYS = 60  # plages au-delà refusées : le budget de requêtes s'étalerait trop
 RESERVE_STEP2 = 25  # requêtes laissées par l'étape 1 à la vérification et aux retours
 RESERVE_RETURNS = 20  # requêtes laissées par la vérification aux retours manquants
 log = logging.getLogger("cheaphops.lastminute")
@@ -71,6 +73,19 @@ log = logging.getLogger("cheaphops.lastminute")
 
 async def _none() -> list[Fare]:
     return []
+
+
+def windows_for(cfg: LastMinute, today: date) -> list[Window]:
+    """Une fenêtre par plage du calendrier ; sans plage, une seule : départ de J+0 à J+days,
+    retour jusqu'à `max_nights` plus tard. Lève ValueError pour une plage passée ou trop loin."""
+    if not cfg.periods:
+        d1 = today + timedelta(days=cfg.days)
+        return [Window(today, d1 + timedelta(days=cfg.max_nights), d1)]
+    limit = today + timedelta(days=HORIZON_DAYS)
+    for p in cfg.periods:
+        if p.start < today or p.end > limit:
+            raise ValueError(f"plage {p.start} -> {p.end} hors de {today} -> {limit}")
+    return [Window(p.start, p.end, p.end) for p in cfg.periods]
 
 
 def _kind(airline: str) -> str | None:

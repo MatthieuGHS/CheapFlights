@@ -6,6 +6,7 @@ log_level: INFO
 lastminute:
   origins: [VNO, KUN, RIX]
   days: 10                 # départs de J+0 à J+days (60 max)
+  periods: []              # ou des plages précises : [{start: 2026-12-30, end: 2027-01-02}]
   max_nights: 3
   weekend: false           # --weekend (CLI) ou case à cocher (UI)
   weekend_return_before: "12:00"   # retour du lundi : arrivée avant cette heure locale

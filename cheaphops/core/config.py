@@ -1,9 +1,9 @@
-from datetime import time
+from datetime import date, time, timedelta
 from pathlib import Path
 from typing import Annotated, Any, Literal
 
 import yaml
-from pydantic import Field
+from pydantic import Field, model_validator
 
 from cheaphops.core.models import Iata, Model, Price
 
@@ -19,9 +19,34 @@ class Google(Model):
     dates: Annotated[int, Field(ge=1)]  # dates échantillonnées, réparties dans la fenêtre
 
 
+class Period(Model):
+    """Plage de dates choisie dans le calendrier : aller et retour y tombent tous les deux."""
+
+    start: date
+    end: date
+
+    @model_validator(mode="after")
+    def _ordered(self) -> "Period":
+        if self.end < self.start:
+            raise ValueError(f"plage {self.start} -> {self.end} : la fin précède le début")
+        return self
+
+
+def _merge_periods(periods: list[Period]) -> list[Period]:
+    """Triées, et fusionnées si elles se touchent : deux plages contiguës n'en font qu'une."""
+    out: list[Period] = []
+    for p in sorted(periods, key=lambda p: p.start):
+        if out and p.start <= out[-1].end + timedelta(days=1):
+            out[-1] = Period(start=out[-1].start, end=max(out[-1].end, p.end))
+        else:
+            out.append(p)
+    return out
+
+
 class LastMinute(Model):
     origins: Annotated[list[Iata], Field(min_length=1)]
-    days: Annotated[int, Field(ge=0, le=60)]  # départs de J+0 à J+days
+    days: Annotated[int, Field(ge=0, le=60)]  # départs de J+0 à J+days (sans `periods`)
+    periods: list[Period]  # plages choisies au calendrier ; vide : mode « J+0 à J+days »
     max_nights: Annotated[int, Field(ge=0)]
     weekend: bool  # départ vendredi/samedi, retour dimanche ou lundi avant `weekend_return_before`
     weekend_return_before: time  # heure locale d'arrivée du retour du lundi
@@ -36,6 +61,14 @@ class LastMinute(Model):
     pause_s: tuple[float, float]  # pause aléatoire entre deux requêtes d'une même source
     request_budget: Annotated[int, Field(ge=1)]
     google: Google
+
+    @model_validator(mode="before")
+    @classmethod
+    def _normalize_periods(cls, data: Any) -> Any:
+        if isinstance(data, dict) and data.get("periods"):
+            periods = [Period.model_validate(p) for p in data["periods"]]
+            data = data | {"periods": _merge_periods(periods)}
+        return data
 
 
 class Config(Model):

@@ -19,6 +19,8 @@ def test_search_validates_runs_one_at_a_time_and_streams_until_done() -> None:
 
     with TestClient(create_app(search=search)) as c:
         assert c.post("/api/searches", json={"days": 100}).status_code == 422
+        past = {"periods": [{"start": "2020-01-01", "end": "2020-01-03"}]}
+        assert c.post("/api/searches", json=past).status_code == 422
         r = c.post("/api/searches", json={"days": 5, "google": True, "origins": ["RIX"]})
         assert r.status_code == 200
         run_id = r.json()["id"]
