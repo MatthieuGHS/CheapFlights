@@ -298,7 +298,8 @@ async def run(
         got, sent = sources.wizz(
             cfg.origins, d0, d1, cfg.max_nights, len(routes), pause, rates, routes
         )
-        verified.update((h, o, "wizzair") for h, o in routes)
+        # une réponse bloquée (403, 429) ne renvoie rien : la route reste indicative
+        verified.update(r for f in got if (r := _route(f, origins, "wizzair")))
         return got, sent
 
     vr, vw = await asyncio.gather(

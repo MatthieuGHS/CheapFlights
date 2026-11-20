@@ -5,7 +5,9 @@ import asyncio
 import sys
 from datetime import date
 
-from cheaphops.core.config import load_config, load_ground
+from pydantic import ValidationError
+
+from cheaphops.core.config import load_config, load_ground, with_overrides
 from cheaphops.core.log import setup_logging
 from cheaphops.lastminute.fares import Fare, RoundTrip, best_per_route
 from cheaphops.lastminute.run import Result, run
@@ -89,20 +91,16 @@ def main(argv: list[str] | None = None) -> int:
         uvicorn.run(create_app(), host="127.0.0.1", port=args.port)  # local uniquement
         return 0
 
-    lm = config.lastminute
     update = {
-        k: v
-        for k, v in (
-            ("days", args.days),
-            ("origins", args.origins.split(",") if args.origins else None),
-        )
-        if v is not None
+        "days": args.days,
+        "origins": args.origins.split(",") if args.origins else None,
+        "weekend": True if args.weekend else None,
+        "google": {"enabled": True} if args.google else None,
     }
-    lm = lm.model_copy(update=update)
-    if args.weekend:
-        lm = lm.model_copy(update={"weekend": True})
-    if args.google:
-        lm = lm.model_copy(update={"google": lm.google.model_copy(update={"enabled": True})})
+    try:
+        lm = with_overrides(config.lastminute, {k: v for k, v in update.items() if v is not None})
+    except ValidationError as e:
+        ap.error(str(e))
     result = asyncio.run(run(lm, load_ground(), date.today(), lambda e: print(e, file=sys.stderr)))
     print(render(result, all_dates=args.all_dates))
     return 0

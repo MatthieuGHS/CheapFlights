@@ -99,8 +99,10 @@ def parse_money(text: str, default: str = "EUR") -> tuple[Decimal, str] | None:
     if "," in raw and "." in raw:
         sep = "," if raw.rfind(",") > raw.rfind(".") else "."
         raw = raw.replace("." if sep == "," else ",", "").replace(sep, ".")
-    elif "," in raw:
-        raw = raw.replace(",", "") if re.search(r",\d{3}$", raw) else raw.replace(",", ".")
+    elif re.search(r"[.,]\d{3}$", raw):  # un seul séparateur suivi de 3 chiffres : les milliers
+        raw = raw.replace(",", "").replace(".", "")
+    else:
+        raw = raw.replace(",", ".")
     try:
         amount = Decimal(raw)
     except InvalidOperation:

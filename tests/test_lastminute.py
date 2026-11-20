@@ -128,6 +128,9 @@ def test_parse_money_handles_symbols_codes_and_separators() -> None:
     assert pm("1 299 zł") == (Decimal(1299), "PLN")
     assert pm("1,299.50 EUR") == (Decimal("1299.50"), "EUR")
     assert pm("49,90 EUR") == (Decimal("49.90"), "EUR")
+    assert pm("1.299 zł") == (Decimal(1299), "PLN")
+    assert pm("€1.299") == (Decimal(1299), "EUR")
+    assert pm("€12.50") == (Decimal("12.50"), "EUR")
     assert pm("rien") is None
 
 
@@ -358,8 +361,10 @@ def test_aggregator_routes_are_verified_at_the_airline_and_replaced(monkeypatch)
         # l'agrégateur voit VNO-KRK chez Ryanair (cher) et VNO-OSL chez Norwegian (invérifiable)
         ryr = fare("VNO", "KRK", "2026-10-16", "60", src="google")
         osl = fare("VNO", "OSL", "2026-10-16", "50", src="google")
+        bud = fare("VNO", "BUD", "2026-10-16", "45", src="google")  # Wizz bloqué : rien en retour
         return [replace(ryr, airline="Ryanair", indicative=True),
-                replace(osl, airline="Norwegian", indicative=True)], 2  # fmt: skip
+                replace(osl, airline="Norwegian", indicative=True),
+                replace(bud, airline="Wizz Air", indicative=True)], 3  # fmt: skip
 
     def calendar(api, o, d, months, d0, last, pause):  # type: ignore[no-untyped-def]
         asked.append((o, d))
@@ -381,6 +386,7 @@ def test_aggregator_routes_are_verified_at_the_airline_and_replaced(monkeypatch)
     assert not any(f.price == 60 for f in r.oneways)
     osl = next(f for f in r.oneways if f.destination == "OSL")
     assert osl.indicative  # non vérifiable : conservé, badge indicatif
+    assert any(f.destination == "BUD" and f.indicative for f in r.oneways)
     cal = r.calendars["KRK"]
     assert [(c.day.isoformat(), c.price) for c in cal.out] == [("2026-10-18", Decimal(19))]
     assert [(c.day.isoformat(), c.price) for c in cal.back] == [("2026-10-20", Decimal(17))]

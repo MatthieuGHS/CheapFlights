@@ -16,7 +16,7 @@ from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ValidationError
 
-from cheaphops.core.config import Ground, LastMinute, load_config, load_ground
+from cheaphops.core.config import Ground, LastMinute, load_config, load_ground, with_overrides
 from cheaphops.lastminute.run import Emit, Result, run
 
 SearchFn = Callable[[LastMinute, Ground, date, Emit], Awaitable[Result]]
@@ -72,15 +72,13 @@ def create_app(
     @app.post("/api/searches")
     async def start(req: SearchRequest) -> dict[str, str]:
         base = load_config(config_path).lastminute
-        update = req.model_dump(exclude_none=True, exclude={"google"})
-        try:  # model_copy ne valide pas : une fenêtre hors bornes ferait planter plus loin
-            params = LastMinute.model_validate(base.model_dump() | update)
+        update = req.model_dump(exclude_none=True)
+        if "google" in update:
+            update["google"] = {"enabled": update["google"]}
+        try:
+            params = with_overrides(base, update)
         except ValidationError as e:
             raise HTTPException(422, json.loads(e.json())) from e
-        if req.google is not None:
-            params = params.model_copy(
-                update={"google": params.google.model_copy(update={"enabled": req.google})}
-            )
         r = Run(uuid.uuid4().hex[:12], params)
         runs[r.id] = r
         r.task = asyncio.create_task(execute(r))  # référence gardée : pas de GC

@@ -49,6 +49,11 @@ def _merge(base: dict[str, Any], over: dict[str, Any]) -> dict[str, Any]:
     return out
 
 
+def with_overrides(base: LastMinute, update: dict[str, Any]) -> LastMinute:
+    """Réglages modifiés (CLI, UI), revalidés : `model_copy` laisserait passer days=100."""
+    return LastMinute.model_validate(_merge(base.model_dump(), update))
+
+
 def _read(path: Path) -> dict[str, Any]:
     data = yaml.safe_load(path.read_text()) or {}
     if not isinstance(data, dict):
