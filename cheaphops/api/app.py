@@ -3,6 +3,7 @@ résultat. Un seul utilisateur, un seul process : les recherches vivent en mémo
 
 import asyncio
 import json
+import logging
 import uuid
 from collections.abc import AsyncIterator, Awaitable, Callable
 from dataclasses import dataclass, field
@@ -16,11 +17,20 @@ from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ValidationError
 
-from cheaphops.core.config import Ground, LastMinute, load_config, load_ground, with_overrides
+from cheaphops.core.config import (
+    ROOT,
+    Ground,
+    LastMinute,
+    load_config,
+    load_ground,
+    with_overrides,
+)
 from cheaphops.lastminute.run import Emit, Result, run
 
+KEPT_RUNS = 20  # recherches gardées en mémoire, les plus anciennes oubliées
+log = logging.getLogger("cheaphops.api")
 SearchFn = Callable[[LastMinute, Ground, date, Emit], Awaitable[Result]]
-WEB_DIST = Path(__file__).parent.parent.parent / "web" / "dist"
+WEB_DIST = ROOT / "web" / "dist"
 
 
 class SearchRequest(BaseModel):
@@ -48,8 +58,8 @@ class Run:
 
 
 def create_app(
-    config_path: Path = Path("config.yaml"),
-    ground_path: Path = Path("ground.yaml"),
+    config_path: Path = ROOT / "config.yaml",
+    ground_path: Path = ROOT / "ground.yaml",
     search: SearchFn = run,
     today: Callable[[], date] = date.today,
 ) -> FastAPI:
@@ -60,6 +70,7 @@ def create_app(
         try:
             r.result = await search(r.params, load_ground(ground_path), today(), r.push)
         except Exception as e:  # une recherche qui plante ne doit pas tuer le serveur
+            log.exception("recherche %s", r.id)
             r.error = f"{type(e).__name__}: {e}"
         finally:
             r.done = True
@@ -71,6 +82,8 @@ def create_app(
 
     @app.post("/api/searches")
     async def start(req: SearchRequest) -> dict[str, str]:
+        if any(not r.done for r in runs.values()):  # deux navigateurs Wizz : risque de blocage
+            raise HTTPException(409, "une recherche est déjà en cours")
         base = load_config(config_path).lastminute
         update = req.model_dump(exclude_none=True)
         if "google" in update:
@@ -81,6 +94,8 @@ def create_app(
             raise HTTPException(422, json.loads(e.json())) from e
         r = Run(uuid.uuid4().hex[:12], params)
         runs[r.id] = r
+        while len(runs) > KEPT_RUNS:
+            del runs[next(iter(runs))]
         r.task = asyncio.create_task(execute(r))  # référence gardée : pas de GC
         return {"id": r.id}
 

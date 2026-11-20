@@ -6,9 +6,11 @@ import time
 from decimal import Decimal
 from pathlib import Path
 
+from cheaphops.core.config import ROOT
+
 ECB_URL = "https://www.ecb.europa.eu/stats/eurofxref/eurofxref-daily.xml"
 TTL_S = 24 * 3600
-CACHE = Path("data/fx.json")
+CACHE = ROOT / "data" / "fx.json"
 RATE = re.compile(r"currency=['\"]([A-Z]{3})['\"]\s+rate=['\"]([0-9.]+)['\"]")
 
 
@@ -34,11 +36,13 @@ def load_fx(cache: Path = CACHE, now: float | None = None) -> Fx:
     BCE est injoignable, un cache périmé vaut mieux que rien."""
     now = time.time() if now is None else now
     stale: dict[str, str] | None = None
-    if cache.exists():
+    try:  # cache absent ou abîmé : on refait la requête
         saved = json.loads(cache.read_text())
         stale = saved["rates"]
         if now - saved["at"] < TTL_S:
             return Fx({k: Decimal(v) for k, v in saved["rates"].items()})
+    except (OSError, ValueError, KeyError, TypeError):
+        pass
     try:
         from scrapling.fetchers import Fetcher
 
@@ -48,5 +52,7 @@ def load_fx(cache: Path = CACHE, now: float | None = None) -> Fx:
             raise
         return Fx({k: Decimal(v) for k, v in stale.items()})
     cache.parent.mkdir(parents=True, exist_ok=True)
-    cache.write_text(json.dumps({"at": now, "rates": {k: str(v) for k, v in rates.items()}}))
+    tmp = cache.with_suffix(".tmp")  # écrit puis renommé : jamais de fichier à moitié écrit
+    tmp.write_text(json.dumps({"at": now, "rates": {k: str(v) for k, v in rates.items()}}))
+    tmp.replace(cache)
     return Fx(rates)

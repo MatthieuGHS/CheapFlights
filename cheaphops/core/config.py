@@ -7,6 +7,8 @@ from pydantic import Field
 
 from cheaphops.core.models import Iata, Model, Price
 
+ROOT = Path(__file__).resolve().parents[2]  # racine du dépôt, quel que soit le dossier courant
+
 
 class Google(Model):
     enabled: bool  # désactivé par défaut : 24+ requêtes pour un échantillon de hubs
@@ -60,7 +62,7 @@ def _read(path: Path) -> dict[str, Any]:
     return data
 
 
-def load_config(path: Path = Path("config.yaml"), local: Path | None = None) -> Config:
+def load_config(path: Path = ROOT / "config.yaml", local: Path | None = None) -> Config:
     """config.yaml, puis les overrides de l'UI (config.local.yaml voisin) par-dessus s'il existe."""
     data = _read(path)
     local = local or path.with_name("config.local.yaml")
@@ -79,5 +81,5 @@ class Ground(Model):
     buses: dict[Iata, GroundBus]
 
 
-def load_ground(path: Path = Path("ground.yaml")) -> Ground:
+def load_ground(path: Path = ROOT / "ground.yaml") -> Ground:
     return Ground.model_validate(_read(path))
