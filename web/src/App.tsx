@@ -1,6 +1,10 @@
 import { useEffect, useState } from 'react'
 import { followSearch, getConfig, getSearch, startSearch, type Config, type SearchEvent, type Status } from './api'
+import { Calendar } from './Calendar'
+import { addDays, between, iso, toPeriods } from './dates'
 import { Results } from './Results'
+
+const HORIZON_DAYS = 60 // comme HORIZON_DAYS côté serveur (run.py)
 
 const Field = ({ label, children }: { label: string; children: React.ReactNode }) => (
   <label className="flex flex-col gap-1 text-sm">
@@ -12,6 +16,9 @@ const Field = ({ label, children }: { label: string; children: React.ReactNode }
 export default function App() {
   const [config, setConfig] = useState<Config | null>(null)
   const [days, setDays] = useState(10)
+  const [mode, setMode] = useState<'days' | 'dates'>('days')
+  const [picked, setPicked] = useState<Set<string>>(new Set())
+  const [today] = useState(() => iso(new Date()))
   const [nights, setNights] = useState(3)
   const [origins, setOrigins] = useState('')
   const [google, setGoogle] = useState(false)
@@ -26,6 +33,10 @@ export default function App() {
       .then((c) => {
         setConfig(c)
         setDays(c.days)
+        if (c.periods.length) {
+          setMode('dates')
+          setPicked(new Set(c.periods.flatMap((p) => between(p.start, p.end))))
+        }
         setNights(c.max_nights)
         setOrigins(c.origins.join(', '))
         setGoogle(c.google.enabled)
@@ -50,7 +61,8 @@ export default function App() {
     setEvents([])
     setStatus(null)
     setError(null)
-    startSearch({ days, max_nights: nights, google, weekend, origins: origins.split(',').map((s) => s.trim().toUpperCase()).filter(Boolean) })
+    const periods = mode === 'dates' ? toPeriods(picked) : []
+    startSearch({ days, periods, max_nights: nights, google, weekend, origins: origins.split(',').map((s) => s.trim().toUpperCase()).filter(Boolean) })
       .then((r) => setRunId(r.id))
       .catch((e: unknown) => setError(String(e)))
   }
@@ -73,9 +85,30 @@ export default function App() {
           go()
         }}
       >
-        <Field label="Départ dans les (jours)">
-          <input type="number" min={0} max={60} value={days} onChange={(e) => setDays(+e.target.value)} className="input w-24" />
-        </Field>
+        <fieldset className="flex flex-col gap-1 text-sm">
+          <legend className="mb-1 text-muted">Quand partir</legend>
+          <div className="flex items-center gap-3">
+            <span className="inline-flex rounded-md border border-line bg-surface p-0.5">
+              {(
+                [
+                  ['days', 'Dans les prochains jours'],
+                  ['dates', 'Dates précises'],
+                ] as const
+              ).map(([key, label]) => (
+                <label key={key} className={`cursor-pointer rounded px-3 py-1 ${mode === key ? 'bg-ink text-paper' : 'text-muted hover:text-ink'}`}>
+                  <input type="radio" name="mode" value={key} checked={mode === key} onChange={() => setMode(key)} className="sr-only" />
+                  {label}
+                </label>
+              ))}
+            </span>
+            {mode === 'days' && (
+              <label className="flex items-center gap-2">
+                <input type="number" min={0} max={HORIZON_DAYS} value={days} onChange={(e) => setDays(+e.target.value)} className="input w-20" aria-label="Nombre de jours" />
+                <span className="text-muted">jours</span>
+              </label>
+            )}
+          </div>
+        </fieldset>
         <Field label="Nuits max">
           <input type="number" min={0} value={nights} onChange={(e) => setNights(+e.target.value)} className="input w-20" />
         </Field>
@@ -98,8 +131,13 @@ export default function App() {
             Inclure Google Flights
           </label>
         </fieldset>
+        {mode === 'dates' && (
+          <div className="order-last w-full rounded-md border border-line bg-surface p-4">
+            <Calendar selected={picked} onChange={setPicked} today={today} last={addDays(today, HORIZON_DAYS)} />
+          </div>
+        )}
         <button
-          disabled={running || !config}
+          disabled={running || !config || (mode === 'dates' && picked.size === 0)}
           className="ml-auto rounded-md bg-ink px-5 py-2 text-sm font-medium text-paper hover:opacity-90 disabled:opacity-40"
         >
           {running ? 'Recherche en cours' : 'Chercher des vols'}
@@ -137,7 +175,7 @@ export default function App() {
           La recherche a échoué : {status.error}
         </p>
       )}
-      {status?.result && <Results result={status.result} />}
+      {status?.result && <Results key={status.id} result={status.result} />}
     </div>
   )
 }

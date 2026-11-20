@@ -6,6 +6,7 @@ export const Config = z.object({
   origins: z.array(z.string()),
   optional_origins: z.array(z.string()),
   days: z.number(),
+  periods: z.array(z.object({ start: z.string(), end: z.string() })),
   google: z.object({ enabled: z.boolean() }),
   max_nights: z.number(),
   weekend: z.boolean(),
@@ -43,8 +44,18 @@ const Cell = z.object({ day: z.string(), price: z.number(), origin: z.string(), 
 const Calendar = z.object({ out: z.array(Cell), back: z.array(Cell) })
 export type Calendar = z.infer<typeof Calendar>
 
+const Period = z.object({
+  start: z.string(),
+  end: z.string(),
+  roundtrips: z.array(RoundTrip),
+  alternatives: z.record(z.string(), z.array(RoundTrip)),
+  calendars: z.record(z.string(), Calendar),
+})
+export type Period = z.infer<typeof Period>
+
 const Result = z.object({
   oneways: z.array(Fare),
+  periods: z.array(Period),
   deals: z.array(
     z.object({
       source: z.string(),
@@ -58,10 +69,7 @@ const Result = z.object({
       indicative: z.boolean(),
     }),
   ),
-  roundtrips: z.array(RoundTrip),
-  alternatives: z.record(z.string(), z.array(RoundTrip)),
   bus: z.record(z.string(), Bus),
-  calendars: z.record(z.string(), Calendar),
   requests: z.number(),
   seconds: z.number(),
   sources: z.record(
@@ -101,7 +109,15 @@ async function call<T>(schema: z.ZodType<T>, url: string, init?: RequestInit): P
 }
 
 export const getConfig = () => call(Config, '/api/config')
-export const startSearch = (request: { days: number; origins: string[]; max_nights: number; google: boolean; weekend: boolean }) =>
+export type SearchRequest = {
+  days: number
+  periods: { start: string; end: string }[] // [] : mode « dans les N jours »
+  origins: string[]
+  max_nights: number
+  google: boolean
+  weekend: boolean
+}
+export const startSearch = (request: SearchRequest) =>
   call(z.object({ id: z.string() }), '/api/searches', { method: 'POST', body: JSON.stringify(request) })
 export const getSearch = (id: string) => call(Status, `/api/searches/${id}`)
 

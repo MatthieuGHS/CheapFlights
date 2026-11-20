@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import type { Bus, Calendar, Fare, Result, RoundTrip } from './api'
+import { periodLabel } from './dates'
 
 const eur = new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' })
 const eur0 = new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 })
@@ -162,11 +163,13 @@ type View = (typeof VIEWS)[number][0]
 
 export function Results({ result }: { result: Result }) {
   const [view, setView] = useState<View>('roundtrips')
+  const [shown, setShown] = useState(0) // plage affichée
+  const period = result.periods[Math.min(shown, result.periods.length - 1)]!
   const [maxPrice, setMaxPrice] = useState('')
   const limit = maxPrice === '' ? Infinity : Number(maxPrice)
   const oneways = result.oneways.filter((f) => f.price <= limit).sort((a, b) => a.price - b.price)
   const counts: Record<View, number> = {
-    roundtrips: result.roundtrips.length,
+    roundtrips: result.periods.reduce((n, p) => n + p.roundtrips.length, 0),
     oneways: result.oneways.length,
     deals: result.deals.length,
   }
@@ -208,21 +211,39 @@ export function Results({ result }: { result: Result }) {
       </nav>
 
       {view === 'roundtrips' && (
-        <ul role="tabpanel" className="divide-y divide-line">
-          {result.roundtrips.map((t) => (
-            <Trip
-              key={t.out.destination}
-              t={t}
-              others={(result.alternatives[t.out.destination] ?? []).slice(1)}
-              cal={result.calendars[t.out.destination]}
-            />
-          ))}
-          {result.roundtrips.length === 0 && (
-            <li className="py-8 text-muted">
-              Aucun aller-retour dans cette fenêtre. Essayez plus de jours ou plus de nuits.
-            </li>
+        <div role="tabpanel">
+          {result.periods.length > 1 && (
+            <div className="flex flex-wrap gap-2 pt-4" role="group" aria-label="Plage affichée">
+              {result.periods.map((p, i) => (
+                <button
+                  key={p.start}
+                  type="button"
+                  aria-pressed={p === period}
+                  onClick={() => setShown(i)}
+                  className={`rounded-full border px-3 py-1 text-sm ${p === period ? 'border-accent bg-accent-soft text-accent' : 'border-line text-muted hover:text-ink'}`}
+                >
+                  {periodLabel(p)} <span className="opacity-70">{p.roundtrips.length}</span>
+                </button>
+              ))}
+            </div>
           )}
-        </ul>
+          <ul className="divide-y divide-line">
+            {period.roundtrips.map((t) => (
+              <Trip
+                key={t.out.destination}
+                t={t}
+                others={(period.alternatives[t.out.destination] ?? []).slice(1)}
+                cal={period.calendars[t.out.destination]}
+              />
+            ))}
+            {period.roundtrips.length === 0 && (
+              <li className="py-8 text-muted">
+                Aucun aller-retour sur {result.periods.length > 1 ? 'cette plage' : 'ces dates'}. Essayez plus de jours ou
+                plus de nuits.
+              </li>
+            )}
+          </ul>
+        </div>
       )}
 
       {view === 'oneways' && (
