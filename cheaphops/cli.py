@@ -66,6 +66,17 @@ def _trip(t: RoundTrip) -> str:
     return f"  {t.total} € (vols) / {t.nights} n : {legs}{check}{_bus(t)}"
 
 
+def _periods(text: str) -> list[dict[str, str]]:
+    """« 2026-11-20:2026-11-26,2026-12-25 » -> plages ; un jour seul est une plage d'un jour."""
+    out = []
+    for part in text.split(","):
+        bounds = [b.strip() for b in part.split(":")]
+        if len(bounds) > 2:
+            raise ValueError(f"plage « {part.strip()} » : début:fin attendu")
+        out.append({"start": bounds[0], "end": bounds[-1]})
+    return out
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="cheaphops")
     sub = ap.add_subparsers(dest="command", required=True)
@@ -106,9 +117,9 @@ def main(argv: list[str] | None = None) -> int:
             else None,
             "weekend": True if args.weekend else None,
             "google": {"enabled": True} if args.google else None,
-            # « 2026-12-25 » seul : une plage d'un jour
-            "periods": [dict(zip(("start", "end"), (p.split(":") * 2)[:2], strict=True))
-                        for p in args.dates.split(",")] if args.dates else None,
+            # --days seul repasse en mode « J+0 à J+days », même si la config a des plages
+            "periods": _periods(args.dates) if args.dates
+                       else [] if args.days is not None else None,
         }  # fmt: skip
         lm = with_overrides(config.lastminute, {k: v for k, v in update.items() if v is not None})
         windows_for(lm, date.today())

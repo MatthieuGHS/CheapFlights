@@ -265,7 +265,7 @@ async def run(
         return items
 
     ry_windows = _ry_windows(out_days)
-    charts = sum(len(sources.farechart_centers(a, b)) for a, b in spans)
+    charts = len(sources.farechart_centers_for(spans))
     wizz_routes, g_dests, g_dates = _plan(cfg, len(ry_windows), charts)
 
     api = Ryanair(currency="EUR")

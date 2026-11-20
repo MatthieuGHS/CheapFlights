@@ -94,6 +94,17 @@ def farechart_centers(d0: dt.date, last: dt.date) -> list[dt.date]:
             for i in range(-(-((last - d0).days + 1) // step))]  # fmt: skip
 
 
+def farechart_centers_for(spans: list[tuple[dt.date, dt.date]]) -> list[dt.date]:
+    """Centres couvrant des plages triées, sans repayer les jours déjà couverts par le précédent."""
+    centers: list[dt.date] = []
+    for a, b in spans:
+        if centers:
+            a = max(a, centers[-1] + dt.timedelta(days=FARECHART_RADIUS + 1))
+        if a <= b:
+            centers += farechart_centers(a, b)
+    return centers
+
+
 def wizz(
     origins: list[str],
     spans: list[tuple[dt.date, dt.date]],
@@ -156,8 +167,7 @@ def wizz(
                 known[(o, f.destination)] = f.price
         cheapest = routes if routes is not None else sorted(known, key=lambda r: known[r])
         cheapest = cheapest[:max_routes]
-        centers = [c for a, b in spans for c in farechart_centers(a, b)]
-        for center in centers if cheapest else []:
+        for center in farechart_centers_for(spans) if cheapest else []:
             for o, d in cheapest:
                 stamp = f"{center.isoformat()}T00:00:00"
                 fc: dict[str, Any] = {

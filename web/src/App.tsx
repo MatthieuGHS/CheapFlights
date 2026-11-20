@@ -61,7 +61,8 @@ export default function App() {
     setEvents([])
     setStatus(null)
     setError(null)
-    const periods = mode === 'dates' ? toPeriods(picked) : []
+    // des plages de la config, ou une page ouverte depuis hier, peuvent contenir des jours passés
+    const periods = mode === 'dates' ? toPeriods([...picked].filter((d) => d >= today)) : []
     startSearch({ days, periods, max_nights: nights, google, weekend, origins: origins.split(',').map((s) => s.trim().toUpperCase()).filter(Boolean) })
       .then((r) => setRunId(r.id))
       .catch((e: unknown) => setError(String(e)))

@@ -477,6 +477,8 @@ def test_budget_plan_shrinks_google_then_wizz_and_farechart_covers_the_window() 
     assert run_mod._plan(cfg.model_copy(update={"request_budget": 10}), 2, 1) == (0, [], 1)
     centers = sources.farechart_centers(date(2026, 10, 1), date(2026, 10, 20))
     assert centers == [date(2026, 10, 10), date(2026, 10, 29)]  # ±9 j : 1-19 puis 20-38
+    days = [(date(2026, 10, d), date(2026, 10, d)) for d in (1, 3, 8, 15, 22, 24)]
+    assert sources.farechart_centers_for(days) == [date(2026, 10, 10), date(2026, 10, 31)]
 
 
 def test_periods_merge_when_touching_and_windows_follow_the_mode() -> None:
