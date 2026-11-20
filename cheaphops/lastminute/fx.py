@@ -41,7 +41,7 @@ def load_fx(cache: Path = CACHE, now: float | None = None) -> Fx:
         stale = saved["rates"]
         if now - saved["at"] < TTL_S:
             return Fx({k: Decimal(v) for k, v in saved["rates"].items()})
-    except (OSError, ValueError, KeyError, TypeError):
+    except (OSError, ValueError, KeyError, TypeError, ArithmeticError):
         pass
     try:
         from scrapling.fetchers import Fetcher

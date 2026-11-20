@@ -93,7 +93,9 @@ def main(argv: list[str] | None = None) -> int:
 
     update = {
         "days": args.days,
-        "origins": args.origins.split(",") if args.origins else None,
+        "origins": [o.strip().upper() for o in args.origins.split(",") if o.strip()] or None
+        if args.origins
+        else None,
         "weekend": True if args.weekend else None,
         "google": {"enabled": True} if args.google else None,
     }

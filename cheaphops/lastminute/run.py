@@ -66,9 +66,6 @@ class Result:
 
 RESERVE_STEP2 = 25  # requêtes laissées par l'étape 1 à la vérification et aux retours
 RESERVE_RETURNS = 20  # requêtes laissées par la vérification aux retours manquants
-# shortcut: le thread d'une source qui dépasse continue en fond (non tuable) ; la recherche,
-# elle, n'attend plus. Passer en annulation coopérative si une source bloque souvent.
-SOURCE_TIMEOUT_S = 300
 log = logging.getLogger("cheaphops.lastminute")
 
 
@@ -227,7 +224,7 @@ async def run(
     async def call[T](name: str, fn: Callable[[], tuple[list[T], int]]) -> list[T]:
         rep, t = reports.setdefault(name, SourceReport()), time.monotonic()
         try:
-            items, sent = await asyncio.wait_for(asyncio.to_thread(fn), SOURCE_TIMEOUT_S)
+            items, sent = await asyncio.to_thread(fn)
         except Exception as e:  # une source en panne ne doit pas faire tomber la recherche
             rep.error = f"{type(e).__name__}: {e}"[:200]
             items, sent = [], 0

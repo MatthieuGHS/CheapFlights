@@ -131,6 +131,7 @@ def test_parse_money_handles_symbols_codes_and_separators() -> None:
     assert pm("1.299 zł") == (Decimal(1299), "PLN")
     assert pm("€1.299") == (Decimal(1299), "EUR")
     assert pm("€12.50") == (Decimal("12.50"), "EUR")
+    assert pm("€0.999") == (Decimal("0.999"), "EUR")
     assert pm("rien") is None
 
 
