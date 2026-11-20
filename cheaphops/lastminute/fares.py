@@ -17,7 +17,7 @@ class Bus:
 
 
 NO_BUS = Bus(Decimal(0), 0)
-Ground = dict[str, Bus]  # aéroport -> bus depuis le domicile
+Buses = dict[str, Bus]  # aéroport -> bus depuis le domicile
 
 
 @dataclass(frozen=True)
@@ -77,7 +77,7 @@ class RoundTrip:
         return self.out.indicative or self.back.indicative
 
 
-def _bus(ground: Ground, start: str, end: str) -> Bus:
+def _bus(ground: Buses, start: str, end: str) -> Bus:
     a, b = ground.get(start, NO_BUS), ground.get(end, NO_BUS)
     return Bus(a.cost + b.cost, a.minutes + b.minutes)
 
@@ -116,7 +116,7 @@ def roundtrips(
     outs: list[Fare],
     backs: list[Fare],
     max_nights: int,
-    ground: Ground,
+    ground: Buses,
     weekend_cutoff: time | None = None,
 ) -> list[RoundTrip]:
     """Deux allers simples quelconques : compagnies différentes, retour vers un autre aéroport
@@ -157,7 +157,7 @@ def bundled_roundtrips(
     deals: list[Deal],
     origins: set[str],
     max_nights: int,
-    ground: Ground,
+    ground: Buses,
     weekend_cutoff: time | None = None,
 ) -> list[RoundTrip]:
     """Bons plans datés (aller-retour à tarif unique) vus comme des aller-retours : le prix est
@@ -173,9 +173,9 @@ def bundled_roundtrips(
         seen.add(key)
         if not 0 <= (d.back - d.day).days <= max_nights:
             continue
-        noon = datetime.combine(d.day, datetime.min.time())
+        out_day = datetime.combine(d.day, datetime.min.time())
         airline = d.airline or d.source
-        out = Fare(d.source, airline, d.origin, d.destination, noon, d.price, None, d.url,
+        out = Fare(d.source, airline, d.origin, d.destination, out_day, d.price, None, d.url,
                    d.indicative)  # fmt: skip
         back_day = datetime.combine(d.back, datetime.min.time())
         back = Fare(d.source, airline, d.destination, d.origin, back_day, Decimal(0), None, d.url,

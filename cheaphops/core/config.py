@@ -1,5 +1,4 @@
 from datetime import time
-from decimal import Decimal
 from pathlib import Path
 from typing import Annotated, Any, Literal
 
@@ -78,10 +77,6 @@ class GroundBus(Model):
 class Ground(Model):
     home: Iata
     buses: dict[Iata, GroundBus]
-
-    def cost(self, airport: str) -> Decimal:
-        """Bus aller simple depuis le domicile ; 0 pour le domicile lui-même."""
-        return self.buses[airport].cost_eur if airport in self.buses else Decimal(0)
 
 
 def load_ground(path: Path = Path("ground.yaml")) -> Ground:

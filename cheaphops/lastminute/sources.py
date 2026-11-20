@@ -40,7 +40,12 @@ def ryanair(api: Any, airport: str, d0: dt.date, d1: dt.date) -> list[Fare]:
             "currency": "EUR",
         },
     )
-    return [_ryanair_fare(x["outbound"]) for x in data["fares"] or [] if _eur(x["outbound"])]
+    return [
+        _ryanair_fare(f, f["departureAirport"]["iataCode"], f["arrivalAirport"]["iataCode"],
+                      f["flightNumber"].replace(" ", ""))
+        for f in (x["outbound"] for x in data["fares"] or [])
+        if _eur(f)
+    ]  # fmt: skip
 
 
 def _eur(f: dict[str, Any]) -> bool:
@@ -62,31 +67,22 @@ def ryanair_calendar(
         )
         r.raise_for_status()
         for x in r.json()["outbound"]["fares"] or []:
-            if x["soldOut"] or x["unavailable"] or x["price"]["currencyCode"] != "EUR":
+            if x["soldOut"] or x["unavailable"] or not _eur(x):
                 continue
-            when = dt.datetime.fromisoformat(x["departureDate"])
-            if d0 <= when.date() <= last:
-                day = when.date().isoformat()
-                arrival = x.get("arrivalDate")
-                fares.append(Fare(
-                    "ryanair", "Ryanair", o, d, when, Decimal(str(x["price"]["value"])), None,
-                    "https://www.ryanair.com/gb/en/trip/flights/select?adults=1&teens=0"
-                    f"&children=0&infants=0&isReturn=false&dateOut={day}&originIata={o}"
-                    f"&destinationIata={d}",
-                    arrival=dt.datetime.fromisoformat(arrival) if arrival else None,
-                ))  # fmt: skip
+            fare = _ryanair_fare(x, o, d)
+            if d0 <= fare.day <= last:
+                fares.append(fare)
     return fares, len(months)
 
 
-def _ryanair_fare(f: dict[str, Any]) -> Fare:
-    when = dt.datetime.fromisoformat(f["departureDate"])
-    o, d, day = f["departureAirport"]["iataCode"], f["arrivalAirport"]["iataCode"], when.date()
-    arrival = f.get("arrivalDate")
+def _ryanair_fare(x: dict[str, Any], o: str, d: str, flight_no: str | None = None) -> Fare:
+    """Tarif farfnd (oneWayFares ou cheapestPerDay) : prix réel, heures de départ et d'arrivée."""
+    when = dt.datetime.fromisoformat(x["departureDate"])
+    arrival = x.get("arrivalDate")
     return Fare(
-        "ryanair", "Ryanair", o, d, when, Decimal(str(f["price"]["value"])),
-        f["flightNumber"].replace(" ", ""),
+        "ryanair", "Ryanair", o, d, when, Decimal(str(x["price"]["value"])), flight_no,
         "https://www.ryanair.com/gb/en/trip/flights/select?adults=1&teens=0&children=0&infants=0"
-        f"&isReturn=false&dateOut={day.isoformat()}&originIata={o}&destinationIata={d}",
+        f"&isReturn=false&dateOut={when.date().isoformat()}&originIata={o}&destinationIata={d}",
         arrival=dt.datetime.fromisoformat(arrival) if arrival else None,
     )  # fmt: skip
 

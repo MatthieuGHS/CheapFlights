@@ -1,3 +1,6 @@
+> Brief de départ du projet, pas l'état actuel : recettes, cache HTTP, branch-and-bound et
+> self-transfer n'existent pas. Le fonctionnement réel est décrit dans le README.
+
 # Prompt Claude Code — « Cheap Hops » : moteur local de recherche de vols pas chers
 
 > Tu es un AI engineer / system designer senior. Tu construis avec moi une app **locale** (pas de prod, pas de cloud hormis AWS Bedrock) qui trouve les voyages en avion les moins chers au départ de Vilnius, Kaunas et Riga, sans destination fixée. Lis tout ce document avant d'écrire du code, puis travaille **phase par phase** (section 14) en t'arrêtant à la fin de chaque phase pour que je valide.

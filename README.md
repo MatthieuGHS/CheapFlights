@@ -24,6 +24,7 @@ sélecteurs adaptatifs, flux RSS ou interception de réponses JSON) : azair, kay
 fly4free-com, secretflying. Voir `docs/COVERAGE.md` pour tous les sites explorés. Sonde d'un site :
 `uv run python -m cheaphops.lastminute.probe URL`.
 
-Étape 2 : les retours sont cherchés depuis les `return_candidates` destinations les moins chères
-(Ryanair, plus Wizz pour celles qu'il dessert). Les aller-retours sont donc limités à ces
-destinations. Tests : `uv run pytest` (fixtures, sans réseau).
+Étape 2 : les routes Ryanair/Wizz vues par un agrégateur sont revérifiées chez la compagnie
+(`verify_routes`), puis les retours manquants sont cherchés chez Ryanair pour les destinations
+les moins chères, dans la limite de `request_budget`. Tests : `uv run pytest` (fixtures, sans
+réseau).

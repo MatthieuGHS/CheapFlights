@@ -1,5 +1,5 @@
-# Configuration de Cheap Hops. Les réglages faits dans l'UI vont dans config.local.yaml
-# (non versionné), jamais ici. Valeurs estimées marquées « # à ajuster ».
+# Configuration de Cheap Hops. Réglages personnels : config.local.yaml (non versionné), fusionné
+# par-dessus celui-ci. Valeurs estimées marquées « # à ajuster ».
 
 log_level: INFO
 

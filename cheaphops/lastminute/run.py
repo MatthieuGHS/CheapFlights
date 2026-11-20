@@ -276,7 +276,6 @@ async def run(
         todo[kind].append((home, other))
         left -= cost
     verified: set[tuple[str, str, str]] = set()
-    verified_fares: list[Fare] = []
 
     def ry_verify() -> tuple[list[Fare], int]:
         fares, sent = [], 0
@@ -306,7 +305,6 @@ async def run(
         call("ryanair", ry_verify) if todo["ryanair"] else _none(),
         call("wizzair", wz_verify) if todo["wizzair"] else _none(),
     )
-    verified_fares = [*vr, *vw]
     if verified:
         pool = [
             f
@@ -318,7 +316,7 @@ async def run(
             for d in dated_deals
             if not ((k := _kind(d.airline or "")) and _deal_route(d, k) in verified)
         ]
-        pool = dedupe([*pool, *verified_fares])
+        pool = dedupe([*pool, *vr, *vw])
         pool = [f for f in pool if d0 <= f.day <= last]
     outs = [f for f in pool if f.origin in origins and f.day <= d1]
     backs = [f for f in pool if f.destination in origins]
@@ -362,13 +360,12 @@ async def run(
             backs = [b for b in backs if weekend_back(b, cutoff)[0]]
 
     total = sum(r.requests for r in reports.values())
-    dated = dated_deals
     undated = {
         (d.origin, d.destination, d.price): d for d in deals if d.day is None or d.back is None
     }
     best_deals = sorted(undated.values(), key=lambda d: d.price)[: cfg.top]
     trips = roundtrips(outs, backs, cfg.max_nights, bus, cutoff)
-    trips += bundled_roundtrips(dated, origins, cfg.max_nights, bus, cutoff)
+    trips += bundled_roundtrips(dated_deals, origins, cfg.max_nights, bus, cutoff)
     ranked = best_per_destination(trips)[: cfg.top]
     shown = {t.out.destination for t in ranked}
     calendars = {dest: calendar_for(dest, pool, origins) for dest in shown}
