@@ -1,52 +1,23 @@
-# Configuration de Cheap Hops. Les réglages faits dans l'UI vont dans config.local.yaml
-# (non versionné), jamais ici. Valeurs estimées marquées « # à ajuster ».
+# Configuration de Cheap Hops. Réglages personnels : config.local.yaml (non versionné), fusionné
+# par-dessus celui-ci. Valeurs estimées marquées « # à ajuster ».
 
-db_path: data/cheaphops.db
 log_level: INFO
 
-http:
-  # le rate limit est par source, dans recipes/<source>/v<N>/manifest.yaml
-  timeout_s: 20
-  vary_headers: [accept-language, x-currency, currency]  # à ajuster par source si besoin
-  explore_ttl_s: 21600     # 6 h (calendriers, routes)
-  verify_ttl_s: 900        # 15 min (vols détaillés)
-
-llm:
-  region: eu-north-1
-  profile: bedrock         # profil de ~/.aws/config
-  # Accès vérifié par `bedrock_check.py --ping` le 2026-10-14 (Haiku 5.5 et Sonnet 5/5.5 refusés).
-  fast:                    # Claude Haiku
-    model_id: eu.anthropic.claude-haiku-4-5-20251001-v1:0
-    price: {input: 1.00, output: 5.00, cache_read: 0.10, cache_write: 1.25}    # USD/Mtok, à ajuster
-  strong:                  # Claude Sonnet
-    model_id: eu.anthropic.claude-sonnet-4-6
-    price: {input: 3.00, output: 15.00, cache_read: 0.30, cache_write: 3.75}   # USD/Mtok, à ajuster
-  caps:
-    per_run_usd: 0.50
-    pathfinder_run_usd: 2.00   # à ajuster
-    total_usd: 40
-
-search:
-  bound_slack: 0.8           # borne basse = prix calendrier × 0.8 (le calendrier peut surestimer)
-  defaults:                  # preset « N'importe quand »
-    origins: [VNO, KUN, RIX]
-    start_offset_days: 1
-    window_days: 56          # 8 semaines
-    max_nights: 3
-    min_on_site_hours: 24
-    return_deadline: null
-    depart_weekdays: null
-    return_weekdays: null
-    blackout: []             # ex. {start: 2026-12-14T08:00, end: 2026-12-18T18:00}
-    max_total_price: null
-    allow_self_transfer: true
-    max_stops_per_direction: 1
-    min_connection_hours: 3  # self-transfer : aucune protection
-    max_layover_hours: 18
-    allow_open_jaw: true
-    top_k: 30
-  presets:                   # surcharges appliquées aux défauts
-    weekend:
-      depart_weekdays: [4, 5]       # ven, sam
-      return_weekdays: [6, 0]       # dim, lun
-      return_deadline: {at: "12:00", weekday: 0}   # lundi 12:00
+lastminute:
+  origins: [VNO, KUN, RIX]
+  days: 10                 # départs de J+0 à J+days (60 max)
+  max_nights: 3
+  weekend: false           # --weekend (CLI) ou case à cocher (UI)
+  weekend_return_before: "12:00"   # retour du lundi : arrivée avant cette heure locale
+  top: 30                  # lignes affichées par tableau
+  optional_origins: [WAW, GDN, TLL]   # ajoutées avec --origins ; bus depuis Vilnius dans ground.yaml
+  oneways_max: 300         # allers simples gardés (vue UI avec filtre de prix)
+  alternatives: 10         # dates proposées par destination pour « toutes les dates »
+  verify_routes: 30        # routes trouvées par un agrégateur dont le calendrier est lu chez Ryanair/Wizz
+  wizz_routes: 30          # routes Wizz dont on lit les prix par jour (farechart, 1 POST chacune)
+  pause_s: [0.3, 0.9]      # pause aléatoire entre deux requêtes d'une même source
+  request_budget: 320      # requêtes réseau max par recherche, toutes sources
+  google:                  # complément : compagnies que Ryanair/Wizz ne couvrent pas
+    enabled: false         # --google (CLI) ou case à cocher (UI) pour l'activer
+    destinations: [WAW, CPH, HEL, FRA]
+    dates: 2               # origines x destinations x dates = requêtes

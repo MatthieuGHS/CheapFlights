@@ -1,92 +1,46 @@
+from datetime import time
 from pathlib import Path
-from typing import Annotated, Any, Literal, Self
+from typing import Annotated, Any, Literal
 
 import yaml
-from pydantic import Field, model_validator
+from pydantic import Field
 
-from cheaphops.core.models import GroundEdge, Iata, Model, Price, SearchDefaults
+from cheaphops.core.models import Iata, Model, Price
 
-
-class HttpConfig(Model):
-    timeout_s: Annotated[float, Field(gt=0)]
-    vary_headers: list[str]  # headers qui changent la réponse : ils entrent dans la clé de cache
-    explore_ttl_s: Annotated[int, Field(ge=0)]
-    verify_ttl_s: Annotated[int, Field(ge=0)]
+ROOT = Path(__file__).resolve().parents[2]  # racine du dépôt, quel que soit le dossier courant
 
 
-class ModelPrice(Model):
-    """USD par million de tokens."""
+class Google(Model):
+    enabled: bool  # désactivé par défaut : 24+ requêtes pour un échantillon de hubs
+    """Google Flights ne sait pas « partir vers n'importe où » : une requête = un aller simple
+    origine -> destination à une date. On échantillonne donc des destinations de hubs."""
 
-    input: Price
-    output: Price
-    cache_read: Price
-    cache_write: Price
-
-
-class LlmCaps(Model):
-    per_run_usd: Price
-    pathfinder_run_usd: Price
-    total_usd: Price
-
-    @model_validator(mode="after")
-    def _pathfinder_above_run(self) -> Self:
-        if self.pathfinder_run_usd < self.per_run_usd:
-            raise ValueError("pathfinder_run_usd must be >= per_run_usd")
-        return self
+    destinations: list[Iata]
+    dates: Annotated[int, Field(ge=1)]  # dates échantillonnées, réparties dans la fenêtre
 
 
-class ModelRole(Model):
-    model_id: str | None  # None tant que scripts/bedrock_check.py n'a pas été lancé
-    price: ModelPrice
-
-
-class LlmConfig(Model):
-    region: str
-    profile: str | None
-    fast: ModelRole
-    strong: ModelRole
-    caps: LlmCaps
-
-
-class SearchConfig(Model):
-    defaults: SearchDefaults
-    bound_slack: Annotated[float, Field(gt=0, le=1)]
-    presets: dict[str, SearchDefaults]
-
-    @model_validator(mode="before")
-    @classmethod
-    def _presets_override_defaults(cls, data: Any) -> Any:
-        if isinstance(data, dict) and isinstance(data.get("defaults"), dict):
-            raw = data.get("presets") or {}
-            data = data | {"presets": {k: data["defaults"] | v for k, v in raw.items()}}
-        return data
+class LastMinute(Model):
+    origins: Annotated[list[Iata], Field(min_length=1)]
+    days: Annotated[int, Field(ge=0, le=60)]  # départs de J+0 à J+days
+    max_nights: Annotated[int, Field(ge=0)]
+    weekend: bool  # départ vendredi/samedi, retour dimanche ou lundi avant `weekend_return_before`
+    weekend_return_before: time  # heure locale d'arrivée du retour du lundi
+    top: Annotated[int, Field(ge=1)]
+    optional_origins: list[Iata]  # villes voisines, avec bus depuis le domicile (ground.yaml)
+    oneways_max: Annotated[int, Field(ge=1)]  # allers simples gardés pour la vue « allers simples »
+    alternatives: Annotated[
+        int, Field(ge=1)
+    ]  # dates proposées par destination (option « tout voir »)
+    verify_routes: Annotated[int, Field(ge=0)]  # routes d'agrégateurs vérifiées chez la compagnie
+    wizz_routes: Annotated[int, Field(ge=0)]  # routes Wizz dont on lit le farechart
+    pause_s: tuple[float, float]  # pause aléatoire entre deux requêtes d'une même source
+    request_budget: Annotated[int, Field(ge=1)]
+    google: Google
 
 
 class Config(Model):
-    db_path: Path
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR"]
-    http: HttpConfig
-    llm: LlmConfig
-    search: SearchConfig
-
-
-class MetroConfig(Model):
-    radius_km: Annotated[float, Field(gt=0)]
-    transfer_cost_eur: Price
-    transfer_min: Annotated[int, Field(ge=0)]
-    overrides: dict[str, list[Iata]]  # nom de métropole -> aéroports, prioritaire sur le rayon
-
-
-class GroundConfig(Model):
-    edges: list[GroundEdge]
-    metro: MetroConfig
-
-    @model_validator(mode="after")
-    def _unique_pairs(self) -> Self:
-        pairs = [frozenset((e.a, e.b)) for e in self.edges]
-        if len(pairs) != len(set(pairs)):
-            raise ValueError("duplicate ground edge (edges are bidirectional)")
-        return self
+    lastminute: LastMinute
 
 
 def _merge(base: dict[str, Any], over: dict[str, Any]) -> dict[str, Any]:
@@ -96,6 +50,11 @@ def _merge(base: dict[str, Any], over: dict[str, Any]) -> dict[str, Any]:
     return out
 
 
+def with_overrides(base: LastMinute, update: dict[str, Any]) -> LastMinute:
+    """Réglages modifiés (CLI, UI), revalidés : `model_copy` laisserait passer days=100."""
+    return LastMinute.model_validate(_merge(base.model_dump(), update))
+
+
 def _read(path: Path) -> dict[str, Any]:
     data = yaml.safe_load(path.read_text()) or {}
     if not isinstance(data, dict):
@@ -103,7 +62,7 @@ def _read(path: Path) -> dict[str, Any]:
     return data
 
 
-def load_config(path: Path = Path("config.yaml"), local: Path | None = None) -> Config:
+def load_config(path: Path = ROOT / "config.yaml", local: Path | None = None) -> Config:
     """config.yaml, puis les overrides de l'UI (config.local.yaml voisin) par-dessus s'il existe."""
     data = _read(path)
     local = local or path.with_name("config.local.yaml")
@@ -112,5 +71,15 @@ def load_config(path: Path = Path("config.yaml"), local: Path | None = None) -> 
     return Config.model_validate(data)
 
 
-def load_ground(path: Path = Path("ground.yaml")) -> GroundConfig:
-    return GroundConfig.model_validate(_read(path))
+class GroundBus(Model):
+    cost_eur: Price
+    duration_min: Annotated[int, Field(gt=0)]
+
+
+class Ground(Model):
+    home: Iata
+    buses: dict[Iata, GroundBus]
+
+
+def load_ground(path: Path = ROOT / "ground.yaml") -> Ground:
+    return Ground.model_validate(_read(path))

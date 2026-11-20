@@ -1,16 +1,10 @@
-# Trajets sol. Les arêtes sont bidirectionnelles.
-# margin_min = temps pour rejoindre l'aéroport et passer la sécurité.
-
-edges:
-  - {a: VNO, b: KUN, duration_min: 90,  cost_eur: 10, margin_min: 120}   # à ajuster
-  - {a: VNO, b: RIX, duration_min: 270, cost_eur: 20, margin_min: 120}   # à ajuster
-  - {a: KUN, b: RIX, duration_min: 270, cost_eur: 20, margin_min: 120}   # à ajuster
-
-metro:                      # regroupement des aéroports de destination
-  radius_km: 60             # à ajuster
-  transfer_cost_eur: 15     # à ajuster
-  transfer_min: 90          # à ajuster
-  overrides:                # prioritaires sur le rayon
-    Milan: [BGY, MXP, LIN]
-    London: [STN, LTN, LGW, LHR, SEN]
-    Paris: [BVA, ORY, CDG]
+# Trajets sol depuis le domicile, aller simple. Coût et durée : estimations de bus (FlixBus,
+# Lux Express, Ecolines), à ajuster. INFORMATION SEULEMENT : affichés à côté des résultats, jamais
+# additionnés au prix des vols (totaux et classement = billets d'avion uniquement).
+home: VNO
+buses:
+  KUN: {cost_eur: 10, duration_min: 100}
+  RIX: {cost_eur: 15, duration_min: 270}
+  WAW: {cost_eur: 25, duration_min: 570}
+  GDN: {cost_eur: 40, duration_min: 780}
+  TLL: {cost_eur: 30, duration_min: 540}

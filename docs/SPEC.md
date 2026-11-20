@@ -1,3 +1,6 @@
+> Brief de départ du projet, pas l'état actuel : recettes, cache HTTP, branch-and-bound et
+> self-transfer n'existent pas. Le fonctionnement réel est décrit dans le README.
+
 # Prompt Claude Code — « Cheap Hops » : moteur local de recherche de vols pas chers
 
 > Tu es un AI engineer / system designer senior. Tu construis avec moi une app **locale** (pas de prod, pas de cloud hormis AWS Bedrock) qui trouve les voyages en avion les moins chers au départ de Vilnius, Kaunas et Riga, sans destination fixée. Lis tout ce document avant d'écrire du code, puis travaille **phase par phase** (section 14) en t'arrêtant à la fin de chaque phase pour que je valide.
@@ -116,7 +119,7 @@ Règles :
 - Les **skills** réutilisables (bootstrap de cookies, parsing de dates, retry avec jitter, extraction JSON depuis `<script>`…) vivent dans `skills/` et sont importables par les recettes. Les agents doivent les réutiliser plutôt que régénérer.
 - Statuts : `draft` → `quarantined` | `active` → `deprecated`. Rollback automatique à la dernière version `active` si la nouvelle échoue en prod.
 
-**Sources v0** : Ryanair, Wizz Air (recettes écrites à la main en phase 1). Wizz : **tarif normal** par défaut ; le prix Wizz Discount Club n'est qu'une option d'affichage, jamais utilisé pour le score. **Phase 4** : airBaltic ajouté par le Pathfinder comme test d'acceptation. Plus tard, éventuellement un agrégateur spécialisé low-cost comme source de recoupement.
+**Sources v0** : Ryanair, Wizz Air (recettes écrites à la main en phase 1). Wizz : **tarif normal** par défaut ; le prix Wizz Discount Club n'est qu'une option d'affichage, jamais utilisé pour le score. Wizz protège son endpoint d'horaires (`search`) par Kasada : la recette ne fournit que `routes` et `calendar` (prix au jour). Un segment Wizz sans horaire n'entre que dans un **aller-retour direct**, jamais dans une combinaison self-transfer, avec le badge « horaires et aéroport de départ à vérifier » (Wizz mélange VNO et KUN dans ses prix). **Phase 4** : airBaltic ajouté par le Pathfinder comme test d'acceptation. Plus tard, éventuellement un agrégateur spécialisé low-cost comme source de recoupement.
 
 ## 7. Fetch ladder
 
@@ -234,6 +237,8 @@ Chaque section a un budget max ; si elle déborde, on tronque par priorité et l
 
 ## 14. Phases de livraison
 
+> **Périmètre (arbitrage du 2026-10-14)** : le projet s'arrête après la phase 2. Les phases 3 à 5 sont **en pause** ; leur description reste ici pour une reprise éventuelle. À la place des agents LLM, deux skills projet décrivent les procédures du Medic et du Pathfinder, exécutées par Claude Code avec l'utilisateur comme juge : `.claude/skills/repair-recipe/` et `.claude/skills/add-source/`.
+
 **Fin de chaque phase, dans cet ordre :**
 1. Tests + lint verts.
 2. `/ponytail-review` sur le diff de la phase, puis application des suppressions pertinentes.
@@ -254,15 +259,15 @@ Outil `recon`, fetch ladder (rungs 1-4, choix heuristique), recettes Ryanair + W
 FastAPI (lancer une recherche, SSE de progression, résultats, santé des sources), front React complet hors onglet Agents.
 *Acceptation* : je lance une recherche depuis l'UI et vois la progression puis les résultats.
 
-**Phase 3 — Infra LLM + Medic**
+**Phase 3 — Infra LLM + Medic** *(en pause)*
 Client Bedrock + ledger + plafonds, compresseurs, tables `episodes`/`lessons`, ContextBuilder, Medic, gardes déterministes + Judge, sandbox `bwrap` (présent sur la machine) = vraie frontière : subprocess avec timeout, env sans credentials AWS, **`$HOME` masqué** (`~/.aws/credentials` est un fichier), **écriture uniquement dans un tmp**, **réseau limité à l'allowlist** du manifeste (mécanisme à décider en phase 3).
 *Acceptation* : je casse volontairement une fixture/un parser Ryanair → le Medic diagnostique, patche, le juge valide, la nouvelle version passe `active`, et l'épisode est journalisé. Le coût du run est affiché.
 
-**Phase 4 — Pathfinder**
+**Phase 4 — Pathfinder** *(en pause)*
 Pathfinder branché sur `recon`, génération de recette + tests, promotion via le juge.
 *Acceptation* : `cheaphops pathfind https://www.airbaltic.com --goal calendar` produit une recette airBaltic `active` (ou un rapport d'échec clair), sans code écrit par moi.
 
-**Phase 5 — Évolution**
+**Phase 5 — Évolution** *(en pause)*
 Consolidator + export `lessons/*.md`, Thompson sampling sur les rungs, Planner bandit basé sur l'historique de prix, onglet Agents de l'UI.
 *Acceptation* : après plusieurs runs, les leçons apparaissent ; les stats `(source, rung)` sont **persistées et utilisées pour l'ordre d'essai** des rungs (Thompson simple). Pas de critère de convergence : en mode à la demande, le volume est trop faible pour la mesurer.
 

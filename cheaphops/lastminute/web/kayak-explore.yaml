@@ -1,0 +1,21 @@
+# Kayak Explore : « n'importe où » depuis un aéroport, une réponse JSON de ~160 destinations avec
+# dates aller/retour, compagnie et prix aller-retour (USD, converti). La page est un SPA : mode
+# dynamic, interception de la réponse /explorePageDestinations.
+name: kayak-explore
+mode: dynamic
+urls:
+  - "https://www.kayak.com/explore/{origin}-anywhere"
+extract:
+  kind: json
+  response_url_contains: explorePageDestinations
+  items: destinations
+  currency: USD
+  fields:
+    origin: originAirportCode
+    destination: airport.iata
+    price: flightInfo.localePrice.price
+    currency: flightInfo.localePrice.currency
+    url: clickoutUrl
+    day: dateDepart
+    back: dateReturn
+    airline: airline
