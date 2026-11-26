@@ -38,6 +38,7 @@ class SearchRequest(BaseModel):
     days: int | None = None
     periods: list[dict[str, date]] | None = None  # [] : retour au mode « J+0 à J+days »
     origins: list[str] | None = None
+    destinations: list[str] | None = None  # [] : n'importe où
     max_nights: int | None = None
     google: bool | None = None
     weekend: bool | None = None

@@ -7,6 +7,7 @@ export const Config = z.object({
   optional_origins: z.array(z.string()),
   days: z.number(),
   periods: z.array(z.object({ start: z.string(), end: z.string() })),
+  destinations: z.array(z.string()),
   google: z.object({ enabled: z.boolean() }),
   max_nights: z.number(),
   weekend: z.boolean(),
@@ -114,6 +115,7 @@ export type SearchRequest = {
   days: number
   periods: { start: string; end: string }[] // [] : mode « dans les N jours »
   origins: string[]
+  destinations: string[] // [] : n'importe où
   max_nights: number
   google: boolean
   weekend: boolean
@@ -129,6 +131,7 @@ const HistoryEntry = z.object({
   days: z.number(),
   periods: z.array(z.object({ start: z.string(), end: z.string() })),
   weekend: z.boolean(),
+  destinations: z.array(z.string()),
   best: z.number().nullable(),
   count: z.number(),
 })

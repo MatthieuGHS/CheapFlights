@@ -60,6 +60,7 @@ export function History({ id }: { id: string | null }) {
               <span className="text-muted">
                 {' '}
                 depuis {e.origins.join(', ')}
+                {e.destinations.length > 0 && ` vers ${e.destinations.join(', ')}`}
                 {e.weekend && ', week-end'}
               </span>
             </span>

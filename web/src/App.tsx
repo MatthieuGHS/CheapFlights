@@ -36,6 +36,8 @@ export default function App() {
   const [today] = useState(() => iso(new Date()))
   const [nights, setNights] = useState(3)
   const [origins, setOrigins] = useState('')
+  const [targets, setTargets] = useState('') // vide : n'importe où
+  const [aimed, setAimed] = useState(false)
   const [google, setGoogle] = useState(false)
   const [weekend, setWeekend] = useState(false)
   const [runId, setRunId] = useState<string | null>(null)
@@ -54,6 +56,8 @@ export default function App() {
         }
         setNights(c.max_nights)
         setOrigins(c.origins.join(', '))
+        setTargets(c.destinations.join(', '))
+        setAimed(c.destinations.length > 0)
         setGoogle(c.google.enabled)
         setWeekend(c.weekend)
       })
@@ -83,7 +87,9 @@ export default function App() {
     setError(null)
     // des plages de la config, ou une page ouverte depuis hier, peuvent contenir des jours passés
     const periods = mode === 'dates' ? toPeriods([...picked].filter((d) => d >= today)) : []
-    startSearch({ days, periods, max_nights: nights, google, weekend, origins: origins.split(',').map((s) => s.trim().toUpperCase()).filter(Boolean) })
+    const codes = (text: string) => text.split(',').map((s) => s.trim().toUpperCase()).filter(Boolean)
+    const destinations = aimed ? codes(targets) : []
+    startSearch({ days, periods, max_nights: nights, google, weekend, origins: codes(origins), destinations })
       .then((r) => setRunId(r.id))
       .catch((e: unknown) => setError(String(e)))
   }
@@ -108,7 +114,7 @@ export default function App() {
           </nav>
         </div>
         <p className="mt-1 text-muted">
-          Les vols les moins chers des prochains jours, vers n'importe où
+          Les vols les moins chers des prochains jours, {aimed && targets.trim() ? `vers ${targets.toUpperCase()}` : "vers n'importe où"}
           {config && ` depuis ${config.origins.join(', ')}`}.
         </p>
       </header>
@@ -160,6 +166,42 @@ export default function App() {
                 aria-describedby="optional-origins"
               />
             </Field>
+            <fieldset className="flex flex-col gap-1 text-sm">
+              <legend className="mb-1 text-muted">Où aller</legend>
+              <div className="flex items-center gap-3">
+                <span className="inline-flex rounded-md border border-line bg-surface p-0.5">
+                  {(
+                    [
+                      [false, "N'importe où"],
+                      [true, 'Aéroports précis'],
+                    ] as const
+                  ).map(([key, label]) => (
+                    <label key={label} className={`cursor-pointer rounded px-3 py-1 ${aimed === key ? 'bg-ink text-paper' : 'text-muted hover:text-ink'}`}>
+                      <input
+                        type="radio"
+                        name="aim"
+                        checked={aimed === key}
+                        onChange={() => {
+                          setAimed(key)
+                          if (key) setGoogle(true) // vers des cibles, Google couvre airBaltic, LOT… : coché par défaut
+                        }}
+                        className="sr-only"
+                      />
+                      {label}
+                    </label>
+                  ))}
+                </span>
+                {aimed && (
+                  <input
+                    value={targets}
+                    onChange={(e) => setTargets(e.target.value)}
+                    placeholder="BGY, BCN"
+                    aria-label="Aéroports visés"
+                    className="input w-40 uppercase"
+                  />
+                )}
+              </div>
+            </fieldset>
             <fieldset className="flex flex-col gap-1.5 text-sm">
               <legend className="sr-only">Options</legend>
               <label className="flex items-center gap-2">
@@ -177,7 +219,7 @@ export default function App() {
               </div>
             )}
             <button
-              disabled={running || !config || (mode === 'dates' && picked.size === 0)}
+              disabled={running || !config || (mode === 'dates' && picked.size === 0) || (aimed && !targets.trim())}
               className="ml-auto rounded-md bg-ink px-5 py-2 text-sm font-medium text-paper hover:opacity-90 disabled:opacity-40"
             >
               {running ? 'Recherche en cours' : 'Chercher des vols'}

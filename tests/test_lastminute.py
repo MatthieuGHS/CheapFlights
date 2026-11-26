@@ -550,3 +550,47 @@ def test_periods_keep_both_legs_in_the_same_range_and_bound_return_searches(monk
         [Window(date(2026, 11, 1), date(2026, 11, 25), date(2026, 11, 22))], weekend=False
     )) == [(date(2026, 11, 1), date(2026, 11, 10)), (date(2026, 11, 11), date(2026, 11, 20)),
            (date(2026, 11, 21), date(2026, 11, 22))]  # fmt: skip
+
+
+def test_aimed_destinations_read_daily_prices_on_those_routes_only(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    from cheaphops.core.config import with_overrides
+
+    cfg = with_overrides(load_config().lastminute, {
+        "pause_s": (0, 0), "days": 10, "origins": ["VNO"], "destinations": ["BGY"],
+        "google": {"enabled": True, "dates": 1},
+    })  # fmt: skip
+    calendars: list[tuple[str, str]] = []
+    wizz_args: list[object] = []
+    google_calls: list[tuple[list[str], list[str]]] = []
+
+    def calendar(api, o, d, months, d0, last, pause):  # type: ignore[no-untyped-def]
+        calendars.append((o, d))
+        return [fare(o, d, "2026-11-22" if o == "VNO" else "2026-11-24", "20")], len(months)
+
+    def google(origins, dests, days, pause):  # type: ignore[no-untyped-def]
+        google_calls.append((origins, dests))
+        return [], len(origins) * len(dests) * len(days)
+
+    def anywhere(*a):  # type: ignore[no-untyped-def]
+        raise AssertionError("pas de recherche « n'importe où » quand les cibles sont connues")
+
+    def wizz(*a, **k):  # type: ignore[no-untyped-def]
+        wizz_args.append(a[-1])
+        return [], 1
+
+    agg = [replace(fare("VNO", "ATH", "2026-11-22", "5", src="azair"), indicative=True)]
+    monkeypatch.setattr(sources, "ryanair", anywhere)
+    monkeypatch.setattr(sources, "ryanair_calendar", calendar)
+    monkeypatch.setattr(sources, "wizz", wizz)
+    monkeypatch.setattr(sources, "google", google)
+    monkeypatch.setattr(generic, "load_sources", lambda: [SimpleNamespace(name="azair")])
+    monkeypatch.setattr(generic, "run_source", lambda *a: ([], agg, 1, "fetcher"))
+    monkeypatch.setattr(run_mod, "Ryanair", lambda currency: SimpleNamespace(num_queries=0))
+    ground = Ground.model_validate({"home": "VNO", "buses": {}})
+
+    r = asyncio.run(run_mod.run(cfg, ground, date(2026, 11, 20), fx=FX))
+    assert calendars == [("VNO", "BGY"), ("BGY", "VNO")]
+    assert wizz_args == [[("VNO", "BGY")]]  # farechart direct sur la route visée
+    assert google_calls == [(["VNO"], ["BGY"]), (["BGY"], ["VNO"])]  # aller puis retour
+    assert [(t.out.destination, t.total) for t in r.periods[0].roundtrips] == [("BGY", Decimal(40))]
+    assert all(f.destination != "ATH" for f in r.oneways)  # hors cible : écarté

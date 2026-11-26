@@ -47,6 +47,8 @@ class LastMinute(Model):
     origins: Annotated[list[Iata], Field(min_length=1)]
     days: Annotated[int, Field(ge=0, le=60)]  # départs de J+0 à J+days (sans `periods`)
     periods: list[Period]  # plages choisies au calendrier ; vide : mode « J+0 à J+days »
+    # aéroports visés ; vide : n'importe où. Borné : chaque cible coûte des requêtes par origine
+    destinations: Annotated[list[Iata], Field(max_length=10)]
     max_nights: Annotated[int, Field(ge=0)]
     weekend: bool  # départ vendredi/samedi, retour dimanche ou lundi avant `weekend_return_before`
     weekend_return_before: time  # heure locale d'arrivée du retour du lundi

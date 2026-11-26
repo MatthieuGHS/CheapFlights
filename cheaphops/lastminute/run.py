@@ -142,6 +142,12 @@ def _out_days(windows: list[Window], weekend: bool) -> list[date]:
     return sorted(d for d in days if not weekend or d.weekday() in (4, 5))
 
 
+def _back_days(windows: list[Window], weekend: bool) -> list[date]:
+    """Jours où un retour est possible, triés (dimanches et lundis seuls en mode week-end)."""
+    days = {w.start + timedelta(i) for w in windows for i in range((w.end - w.start).days + 1)}
+    return sorted(d for d in days if not weekend or d.weekday() in (6, 0))
+
+
 def _ry_windows(days: list[date]) -> list[tuple[date, date]]:
     """Plages interrogées sur oneWayFares (une requête par plage et par aéroport, le moins cher
     par destination) : les jours de départ consécutifs, par tranches de 10 jours au plus."""
@@ -267,9 +273,47 @@ async def run(
 
     ry_windows = _ry_windows(out_days)
     charts = len(sources.farechart_centers_for(spans))
-    wizz_routes, g_dests, g_dates = _plan(cfg, len(ry_windows), charts)
+    months = sorted({m for a, b in spans for m in _months(a, b)})
+    aim = cfg.destinations  # vide : n'importe où
+    pairs = [(o, t) for o in cfg.origins for t in aim if o != t]
+    if aim:  # routes connues : prix jour par jour sur chacune, pas de découverte
+        wizz_routes, g_dests, g_dates = len(pairs), list(aim), cfg.google.dates
+    else:
+        wizz_routes, g_dests, g_dates = _plan(cfg, len(ry_windows), charts)
+    if not cfg.google.enabled:
+        g_dests = []
 
     api = Ryanair(currency="EUR")
+    verified: set[tuple[str, str, str]] = set()  # routes dont le prix vient de la compagnie
+
+    def ry_calendars(routes: list[tuple[str, str]]) -> tuple[list[Fare], int]:
+        fares, sent = [], 0
+        for home, other in routes:
+            try:
+                for o, d in ((home, other), (other, home)):
+                    got, n_req = sources.ryanair_calendar(api, o, d, months, d0, last, pause)
+                    fares += got
+                    sent += n_req
+                    pause()
+            except Exception as e:  # route absente chez Ryanair (404) : on passe à la suivante
+                log.info("calendrier Ryanair %s-%s: %s", home, other, e)
+                continue
+            verified.add((home, other, "ryanair"))
+        return fares, sent
+
+    def wz_routes(routes: list[tuple[str, str]]) -> tuple[list[Fare], int]:
+        got, sent = sources.wizz(cfg.origins, spans, len(routes), pause, rates, routes)
+        # une réponse bloquée (403, 429) ne renvoie rien : la route reste indicative
+        verified.update(r for f in got if (r := _route(f, origins, "wizzair")))
+        return got, sent
+
+    def google_job() -> tuple[list[Fare], int]:
+        got, sent = sources.google(cfg.origins, g_dests, _sample(out_days, g_dates), pause)
+        if aim:  # Google ne connaît que l'aller simple : les retours depuis les cibles aussi
+            back_days = _back_days(windows, cfg.weekend)
+            back, n = sources.google(g_dests, cfg.origins, _sample(back_days, g_dates), pause)
+            got, sent = got + back, sent + n
+        return got, sent
 
     def ry_out() -> tuple[list[Fare], int]:
         fares, first = [], True
@@ -304,63 +348,44 @@ async def run(
         return deals
 
     ry, wz, gg, deals = await asyncio.gather(
-        call("ryanair", ry_out),
-        call("wizzair", lambda: sources.wizz(
+        call("ryanair", (lambda: ry_calendars(pairs)) if aim else ry_out),
+        call("wizzair", (lambda: wz_routes(pairs)) if aim else lambda: sources.wizz(
             cfg.origins, spans, wizz_routes, pause, rates)),
-        call("google", lambda: sources.google(
-            cfg.origins, g_dests, _sample(out_days, g_dates), pause) if g_dests else ([], 0)),
+        call("google", google_job) if g_dests else _none(),
         web_all(),
     )  # fmt: skip
+    if aim:  # les agrégateurs cherchent partout : on ne garde que les cibles
+        deals = [d for d in deals if d.destination in aim]
 
     # VNO et KUN forment une zone MAC chez Wizz : un même vol sort des deux farecharts
     def in_windows(f: Fare) -> bool:
         return any(w.contains(f.day) for w in windows)
 
-    pool = [f for f in dedupe([*ry, *wz, *gg, *web_fares]) if in_windows(f)]
+    def wanted(f: Fare) -> bool:
+        return in_windows(f) and (not aim or f.destination in aim or f.origin in aim)
+
+    pool = [f for f in dedupe([*ry, *wz, *gg, *web_fares]) if wanted(f)]
 
     # Vérification : les agrégateurs découvrent des routes, le prix vient de la compagnie.
     # Pour chaque route Ryanair ou Wizz trouvée par un agrégateur, calendrier réel sur toute la
     # fenêtre, dans les deux sens ; il remplace les prix de l'agrégateur.
     dated_deals = [d for d in deals if d.day is not None and d.back is not None]
-    months = sorted({m for a, b in spans for m in _months(a, b)})
     used = sum(r.requests for r in reports.values())
     if cfg.weekend:  # pas de requête de calendrier pour une route vue seulement un mardi
         pool_hint = [f for f in pool if not f.indicative or _weekend_leg(f, cfg)]
         deal_hint = [d for d in dated_deals if d.day and d.day.weekday() in (4, 5)]
     else:
         pool_hint, deal_hint = pool, dated_deals
-    targets = _targets(pool_hint, deal_hint, origins)
+    targets = {
+        r: p for r, p in _targets(pool_hint, deal_hint, origins).items() if r not in verified
+    }
     costs = {"ryanair": 2 * len(months), "wizzair": charts + 1}
     todo = _pick_verifications(
         targets, cfg.request_budget - used - RESERVE_RETURNS, cfg.verify_routes, costs
     )
-    verified: set[tuple[str, str, str]] = set()
-
-    def ry_verify() -> tuple[list[Fare], int]:
-        fares, sent = [], 0
-        for home, other in todo["ryanair"]:
-            try:
-                for o, d in ((home, other), (other, home)):
-                    got, n_req = sources.ryanair_calendar(api, o, d, months, d0, last, pause)
-                    fares += got
-                    sent += n_req
-                    pause()
-            except Exception as e:
-                log.info("calendrier Ryanair %s-%s: %s", home, other, e)
-                continue
-            verified.add((home, other, "ryanair"))
-        return fares, sent
-
-    def wz_verify() -> tuple[list[Fare], int]:
-        routes = todo["wizzair"]
-        got, sent = sources.wizz(cfg.origins, spans, len(routes), pause, rates, routes)
-        # une réponse bloquée (403, 429) ne renvoie rien : la route reste indicative
-        verified.update(r for f in got if (r := _route(f, origins, "wizzair")))
-        return got, sent
-
     vr, vw = await asyncio.gather(
-        call("ryanair", ry_verify) if todo["ryanair"] else _none(),
-        call("wizzair", wz_verify) if todo["wizzair"] else _none(),
+        call("ryanair", lambda: ry_calendars(todo["ryanair"])) if todo["ryanair"] else _none(),
+        call("wizzair", lambda: wz_routes(todo["wizzair"])) if todo["wizzair"] else _none(),
     )
     if verified:
         pool = [
@@ -374,7 +399,7 @@ async def run(
             if not ((k := _kind(d.airline or "")) and _deal_route(d, k) in verified)
         ]
         pool = dedupe([*pool, *vr, *vw])
-        pool = [f for f in pool if in_windows(f)]
+        pool = [f for f in pool if wanted(f)]
     outs = [f for f in pool if f.origin in origins and any(w.allows_out(f.day) for w in windows)]
     backs = [f for f in pool if f.destination in origins]
     cutoff = cfg.weekend_return_before if cfg.weekend else None

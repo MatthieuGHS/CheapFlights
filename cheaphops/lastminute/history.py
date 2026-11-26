@@ -58,6 +58,7 @@ def entries(directory: Path = HISTORY) -> list[dict[str, Any]]:
         out.append({
             "id": body["id"], "at": body["at"], "origins": p["origins"], "days": p["days"],
             "periods": p["periods"], "weekend": p["weekend"], "best": min(totals, default=None),
+            "destinations": p.get("destinations", []),  # absent des premiers fichiers
             "count": len(totals),
         })  # fmt: skip
     return out

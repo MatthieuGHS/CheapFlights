@@ -96,6 +96,7 @@ def main(argv: list[str] | None = None) -> int:
     s.add_argument(
         "--dates", help="plages précises, ex. 2026-11-20:2026-11-26,2026-12-30:2027-01-02"
     )
+    s.add_argument("--to", help="aéroports visés, ex. BGY,BCN (défaut : n'importe où)")
     s.add_argument("--origins", help="ex. VNO,KUN,RIX,WAW (optionnels : WAW, GDN, TLL)")
     srv = sub.add_parser("serve", help="API + interface web sur http://127.0.0.1:PORT")
     srv.add_argument("--port", type=int, default=8000)
@@ -116,6 +117,9 @@ def main(argv: list[str] | None = None) -> int:
             "days": args.days,
             "origins": [o.strip().upper() for o in args.origins.split(",") if o.strip()] or None
             if args.origins
+            else None,
+            "destinations": [t.strip().upper() for t in args.to.split(",") if t.strip()]
+            if args.to
             else None,
             "weekend": True if args.weekend else None,
             "google": {"enabled": True} if args.google else None,
