@@ -10,6 +10,8 @@ export const Config = z.object({
   destinations: z.array(z.string()),
   connections: z.boolean(),
   google: z.object({ enabled: z.boolean() }),
+  airbaltic: z.object({ enabled: z.boolean() }),
+  kiwi: z.object({ enabled: z.boolean() }),
   max_nights: z.number(),
   weekend: z.boolean(),
   top: z.number(),
@@ -123,6 +125,8 @@ export type SearchRequest = {
   connections: boolean
   max_nights: number
   google: boolean
+  airbaltic: boolean
+  kiwi: boolean
   weekend: boolean
 }
 export const startSearch = (request: SearchRequest) =>

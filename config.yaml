@@ -26,3 +26,9 @@ lastminute:
     enabled: false         # --google (CLI) ou case à cocher (UI) pour l'activer
     destinations: [WAW, CPH, HEL, FRA]
     dates: 2               # origines x destinations x dates = requêtes
+  airbaltic:               # prix de la compagnie, au jour (sans heure)
+    enabled: true
+    requests: 100          # allers de chaque route directe, puis retours des moins chers
+  kiwi:                    # agrégateur (prix indicatifs) : Norwegian, SAS, escales vendues par Kiwi…
+    enabled: true
+    returns: 10            # destinations dont le retour est cherché chez Kiwi (1 requête chacune)

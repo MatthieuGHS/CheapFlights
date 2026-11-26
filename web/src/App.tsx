@@ -39,6 +39,8 @@ export default function App() {
   const [targets, setTargets] = useState('') // vide : n'importe où
   const [aimed, setAimed] = useState(false)
   const [google, setGoogle] = useState(false)
+  const [airbaltic, setAirbaltic] = useState(true)
+  const [kiwi, setKiwi] = useState(true)
   const [weekend, setWeekend] = useState(false)
   const [connections, setConnections] = useState(true)
   const [runId, setRunId] = useState<string | null>(null)
@@ -60,6 +62,8 @@ export default function App() {
         setTargets(c.destinations.join(', '))
         setAimed(c.destinations.length > 0)
         setGoogle(c.google.enabled)
+        setAirbaltic(c.airbaltic.enabled)
+        setKiwi(c.kiwi.enabled)
         setWeekend(c.weekend)
         setConnections(c.connections)
       })
@@ -91,7 +95,7 @@ export default function App() {
     const periods = mode === 'dates' ? toPeriods([...picked].filter((d) => d >= today)) : []
     const codes = (text: string) => text.split(',').map((s) => s.trim().toUpperCase()).filter(Boolean)
     const destinations = aimed ? codes(targets) : []
-    startSearch({ days, periods, max_nights: nights, google, weekend, origins: codes(origins), destinations, connections })
+    startSearch({ days, periods, max_nights: nights, google, airbaltic, kiwi, weekend, origins: codes(origins), destinations, connections })
       .then((r) => setRunId(r.id))
       .catch((e: unknown) => setError(String(e)))
   }
@@ -217,6 +221,14 @@ export default function App() {
               <label className="flex items-center gap-2">
                 <input type="checkbox" checked={google} onChange={(e) => setGoogle(e.target.checked)} className="accent-accent" />
                 Inclure Google Flights
+              </label>
+              <label className="flex items-center gap-2">
+                <input type="checkbox" checked={airbaltic} onChange={(e) => setAirbaltic(e.target.checked)} className="accent-accent" />
+                airBaltic
+              </label>
+              <label className="flex items-center gap-2">
+                <input type="checkbox" checked={kiwi} onChange={(e) => setKiwi(e.target.checked)} className="accent-accent" />
+                Kiwi.com
               </label>
             </fieldset>
             {mode === 'dates' && (

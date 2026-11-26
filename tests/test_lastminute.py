@@ -702,3 +702,81 @@ def test_same_day_return_counts_from_the_arrival_when_known() -> None:
     before_landing = _timed("SVQ", "VNO", "2026-11-22T13:00", "2026-11-22T19:00", "5")
     evening = _timed("SVQ", "VNO", "2026-11-22T21:00", "2026-11-23T03:00", "5")
     assert [t.back for t in roundtrips([out], [before_landing, evening], 3, {})] == [evening]
+
+
+def test_airbaltic_routes_direct_only_round_robin_without_origins() -> None:
+    def dest(**direct: bool) -> dict[str, object]:
+        return {"btDest": {f"{o}A": {"hasBTDirect": d} for o, d in direct.items()}, "nonBtDest": {}}
+
+    od = {"destinData": {
+        "CPHA": dest(RIX=True, VNO=True), "ARNA": dest(RIX=True), "BCNA": dest(RIX=False),
+        "VNOA": dest(RIX=True), "LONC": dest(RIX=True),  # une origine ; un code ville
+    }}  # fmt: skip
+    assert sources.airbaltic_routes(od, ["VNO", "RIX"], []) == [
+        ("VNO", "CPH"), ("RIX", "CPH"), ("RIX", "ARN"),
+    ]  # fmt: skip
+    assert sources.airbaltic_routes(od, ["VNO", "RIX"], ["ARN"]) == [("RIX", "ARN")]
+
+
+def test_parse_airbaltic_skips_days_without_flight_and_prefers_updated_price() -> None:
+    data = {"success": True, "data": [
+        {"price": None, "updatedPrice": None, "date": "2026-12-01", "isDirect": True},
+        {"price": 49.99, "updatedPrice": 39.99, "date": "2026-12-02", "isDirect": True},
+    ]}  # fmt: skip
+    [f] = sources.parse_airbaltic(data, "RIX", "ARN")
+    assert (f.day, f.price, f.indicative) == (date(2026, 12, 2), Decimal("39.99"), False)
+    assert f.url and "originCode=RIX&destinCode=ARN" in f.url and "departure=2026-12-02" in f.url
+    assert sources.parse_airbaltic({"success": False, "error": "Invalid"}, "RIX", "ARN") == []
+
+
+def test_parse_kiwi_keeps_a_kiwi_connection_as_one_indicative_fare() -> None:
+    def end(code: str, slug: str, at: str) -> dict[str, object]:
+        return {"station": {"code": code, "city": {"slug": slug}}, "localTime": at}
+
+    finnair = {"code": "AY", "name": "Finnair"}
+    x = {"price": {"amount": "132"}, "sector": {"sectorSegments": [
+        {"segment": {"source": end("CPH", "copenhagen-denmark", "2026-12-06T17:15:00"),
+                     "destination": end("HEL", "helsinki-finland", "2026-12-06T19:50:00"),
+                     "carrier": finnair, "code": "960"}},
+        {"segment": {"source": end("HEL", "helsinki-finland", "2026-12-06T20:40:00"),
+                     "destination": end("RIX", "riga-latvia", "2026-12-06T21:45:00"),
+                     "carrier": finnair, "code": "1077"}},
+    ]}}  # fmt: skip
+    f = sources.parse_kiwi(x)
+    assert (f.origin, f.destination, f.airline, f.flight_no, f.price, f.indicative) == (
+        "CPH", "RIX", "Finnair", None, Decimal(132), True,
+    )  # fmt: skip
+    assert f.arrival == datetime(2026, 12, 6, 21, 45) and f.legs == ()
+    assert f.url and f.url.endswith("/results/copenhagen-denmark/riga-latvia/2026-12-06/no-return")
+
+
+def test_run_pairs_airbaltic_with_kiwi_without_ryanair_returns(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    cfg = load_config().lastminute.model_copy(update={"pause_s": (0, 0), "connections": False})
+    queried: list[str] = []
+
+    def fake_ry(api, airport, d0, d1):  # type: ignore[no-untyped-def]
+        api.num_queries += 1
+        if airport not in HOME:
+            queried.append(airport)
+        return []
+
+    day = datetime(2026, 10, 15)  # airBaltic : prix au jour, sans heure
+    cph = Fare("airbaltic", "airBaltic", "RIX", "CPH", day, Decimal("38.99"), None, "u")
+    arn = replace(cph, destination="ARN")  # sans retour : pas une route Ryanair, pas de requête
+    back = replace(fare("CPH", "RIX", "2026-10-17", "33", src="kiwi"), indicative=True)
+    monkeypatch.setattr(sources, "airbaltic", lambda *a: ([cph, arn], 5))
+    monkeypatch.setattr(sources, "kiwi", lambda *a: ([back], 2))
+    monkeypatch.setattr(sources, "ryanair", fake_ry)
+    monkeypatch.setattr(sources, "wizz", lambda *a, **k: ([], 1))
+    monkeypatch.setattr(sources, "google", lambda *a: ([], 0))
+    monkeypatch.setattr(generic, "load_sources", lambda: [])
+    monkeypatch.setattr(run_mod, "Ryanair", lambda currency: SimpleNamespace(num_queries=0))
+    ground = Ground.model_validate({"home": "VNO", "buses": {}})
+
+    r = asyncio.run(run_mod.run(cfg, ground, date(2026, 10, 14), fx=FX))
+    assert queried == []
+    trips = r.periods[0].roundtrips
+    assert [(t.out.source, t.back.source, t.total) for t in trips] == [
+        ("airbaltic", "kiwi", Decimal("71.99"))
+    ]
+    assert (r.sources["airbaltic"].requests, r.sources["kiwi"].requests) == (5, 2)

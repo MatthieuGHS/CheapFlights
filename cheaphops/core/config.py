@@ -19,6 +19,16 @@ class Google(Model):
     dates: Annotated[int, Field(ge=1)]  # dates échantillonnées, réparties dans la fenêtre
 
 
+class Airbaltic(Model):
+    enabled: bool
+    requests: Annotated[int, Field(ge=1)]  # max par recherche : allers des routes, puis retours
+
+
+class Kiwi(Model):
+    enabled: bool
+    returns: Annotated[int, Field(ge=0)]  # destinations « n'importe où » dont on cherche le retour
+
+
 class Period(Model):
     """Plage de dates choisie dans le calendrier : aller et retour y tombent tous les deux."""
 
@@ -66,6 +76,8 @@ class LastMinute(Model):
     pause_s: tuple[float, float]  # pause aléatoire entre deux requêtes d'une même source
     request_budget: Annotated[int, Field(ge=1)]
     google: Google
+    airbaltic: Airbaltic  # API du site : prix par jour sur un an, une requête par route et sens
+    kiwi: Kiwi  # agrégateur : compagnies hors Ryanair/Wizz et vols avec escale vendus par Kiwi
 
     @model_validator(mode="before")
     @classmethod

@@ -18,6 +18,12 @@ Sources (`cheaphops/lastminute/sources.py`), réglages dans `config.yaml` (`last
   tombent dans la fenêtre.
 - **Google Flights** (désactivé par défaut, `--google`) : `fast-flights`. Pas de « n'importe où » (une requête = une origine, une
   destination, une date) : échantillon de hubs configuré, hors Ryanair/Wizz.
+- **airBaltic** : API du site (`/api/orig-dest`, `/api/fsf/outbound`), GET publics sans
+  navigateur. Une requête = un an de prix au jour (sans heure) pour une route et un sens : allers
+  de chaque route directe, puis retours des moins chères, plafonné par `airbaltic.requests`.
+- **Kiwi.com** : GraphQL du site (`api.skypicker.com/umbrella/v2/graphql`), sans jeton. Le moins
+  cher par ville « n'importe où », puis le retour des `kiwi.returns` meilleures destinations ;
+  prix indicatifs, Ryanair et Wizz exclus (lus en direct).
 
 Sources YAML (`cheaphops/lastminute/web/*.yaml`, Scrapling : fetcher → stealthy → dynamic,
 sélecteurs adaptatifs, flux RSS ou interception de réponses JSON) : azair, kayak-explore, teztour,

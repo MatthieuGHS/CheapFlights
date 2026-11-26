@@ -1,7 +1,7 @@
 """Recherche « dernière minute partout » : départs de J+0 à J+N depuis les origines, vers
 n'importe quelle destination.
 
-Étape 1 (en parallèle) : Ryanair, Wizz, Google et les sources YAML.
+Étape 1 (en parallèle) : Ryanair, Wizz, Google, airBaltic, Kiwi et les sources YAML.
 Étape 2 : retours Ryanair depuis chaque destination dont l'aller coûte moins que le seuil (Wizz
 donne ses retours dans le même farechart que ses allers).
 """
@@ -205,14 +205,25 @@ def _in_window(d: Deal, windows: list[Window], cfg: LastMinute) -> bool:
     )
 
 
+def _extra_cost(cfg: LastMinute, windows: int, aim: list[str]) -> int:
+    """Requêtes réservées à airBaltic et Kiwi : plafond airBaltic, et par plage, Kiwi n'importe
+    où (+ retours) ou aller et retour par cible."""
+    ab = 0
+    if cfg.airbaltic.enabled:
+        routes = len(cfg.origins) * len(aim) if aim else cfg.airbaltic.requests
+        ab = min(cfg.airbaltic.requests, 1 + 2 * routes)
+    kiwi = windows * (2 * len(aim) if aim else 1 + cfg.kiwi.returns) if cfg.kiwi.enabled else 0
+    return ab + kiwi
+
+
 def _plan(
-    cfg: LastMinute, slices: int, windows: int, months: int = 1
+    cfg: LastMinute, slices: int, windows: int, months: int = 1, extra: int = 0
 ) -> tuple[int, list[str], int]:
     """Budget de l'étape 1 : (routes Wizz, destinations Google, dates Google). Ryanair et Wizz
     d'abord (leur coût est connu), Google prend ce qu'il reste ; les routes Wizz se réduisent si
     la période est longue (`windows` farecharts par route)."""
     n = len(cfg.origins)
-    room = cfg.request_budget - n * slices - RESERVE_STEP2 - (1 + n)
+    room = cfg.request_budget - n * slices - RESERVE_STEP2 - (1 + n) - extra
     room -= _connection_reserve(cfg, months)
     wizz_routes = max(min(cfg.wizz_routes, room // windows), 0)
     g_dests, g_dates = cfg.google.destinations, cfg.google.dates
@@ -223,12 +234,18 @@ def _plan(
 
 
 def _plan_aimed(
-    cfg: LastMinute, aim: list[str], pairs: int, months: int, charts: int, slices: int
+    cfg: LastMinute,
+    aim: list[str],
+    pairs: int,
+    months: int,
+    charts: int,
+    slices: int,
+    extra: int = 0,
 ) -> tuple[int, int, list[str], int]:
     """Budget de l'étape 1 en mode cibles : (paires Ryanair, paires Wizz, cibles Google, dates
     Google). Ryanair d'abord (prix jour par jour réels), puis Wizz, Google prend le reste."""
     n = len(cfg.origins)
-    room = cfg.request_budget - RESERVE_STEP2
+    room = cfg.request_budget - RESERVE_STEP2 - extra
     if cfg.connections:  # recherche des hubs « n'importe où » et correspondances
         room -= n * slices + _connection_reserve(cfg, months)
     ry = min(pairs, max(room, 0) // (2 * months))
@@ -267,7 +284,9 @@ def _missing_returns(
             cheapest.setdefault(f.destination, f)
     # une correspondance a déjà son retour par le hub : pas de requête « retour direct » pour elle
     picks = [
-        f for f in cheapest.values() if f.source != "wizzair" and not f.indicative and not f.legs
+        f
+        for f in cheapest.values()
+        if f.source not in ("wizzair", "airbaltic") and not f.indicative and not f.legs
     ]
     return picks[: max(limit, 0)]
 
@@ -336,13 +355,14 @@ async def run(
     months = sorted({m for a, b in spans for m in _months(a, b)})
     aim = list(dict.fromkeys(cfg.destinations))  # vide : n'importe où
     pairs = [(o, t) for o in cfg.origins for t in aim if o != t]
+    extra = _extra_cost(cfg, len(windows), aim)
     if aim:  # routes connues : prix jour par jour sur chacune, pas de découverte
         ry_pairs, wizz_routes, g_dests, g_dates = _plan_aimed(
-            cfg, aim, len(pairs), len(months), charts, len(ry_windows)
+            cfg, aim, len(pairs), len(months), charts, len(ry_windows), extra
         )
     else:
         ry_pairs = 0
-        wizz_routes, g_dests, g_dates = _plan(cfg, len(ry_windows), charts, len(months))
+        wizz_routes, g_dests, g_dates = _plan(cfg, len(ry_windows), charts, len(months), extra)
     if not cfg.google.enabled:
         g_dests = []
 
@@ -424,11 +444,16 @@ async def run(
             deals += [d for d in got if d.origin in origins and _in_window(d, windows, cfg)]
         return deals
 
-    ry, wz, gg, deals = await asyncio.gather(
+    ry, wz, gg, ab, kw, deals = await asyncio.gather(
         call("ryanair", ry_step1),
         call("wizzair", (lambda: wz_routes(pairs[:wizz_routes])) if aim else lambda: sources.wizz(
             cfg.origins, spans, wizz_routes, pause, rates)),
         call("google", google_job) if g_dests else _none(),
+        call("airbaltic", lambda: sources.airbaltic(
+            cfg.origins, aim, spans, cfg.airbaltic.requests, pause))
+        if cfg.airbaltic.enabled else _none(),
+        call("kiwi", lambda: sources.kiwi(cfg.origins, aim, spans, cfg.kiwi.returns, pause))
+        if cfg.kiwi.enabled else _none(),
         web_all(),
     )  # fmt: skip
     if aim:  # les agrégateurs cherchent partout : on ne garde que les cibles
@@ -441,7 +466,7 @@ async def run(
     def wanted(f: Fare) -> bool:
         return in_windows(f) and (not aim or f.destination in aim or f.origin in aim)
 
-    pool = [f for f in dedupe([*ry, *wz, *gg, *web_fares]) if wanted(f)]
+    pool = [f for f in dedupe([*ry, *wz, *gg, *ab, *kw, *web_fares]) if wanted(f)]
 
     # Vérification : les agrégateurs découvrent des routes, le prix vient de la compagnie.
     # Pour chaque route Ryanair ou Wizz trouvée par un agrégateur, calendrier réel sur toute la

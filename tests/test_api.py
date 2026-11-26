@@ -24,7 +24,9 @@ def test_search_validates_runs_one_at_a_time_and_streams_until_done(tmp_path: Pa
         assert c.post("/api/searches", json={"days": 100}).status_code == 422
         past = {"periods": [{"start": "2020-01-01", "end": "2020-01-03"}]}
         assert c.post("/api/searches", json=past).status_code == 422
-        r = c.post("/api/searches", json={"days": 5, "google": True, "origins": ["RIX"]})
+        r = c.post(
+            "/api/searches", json={"days": 5, "google": True, "kiwi": False, "origins": ["RIX"]}
+        )
         assert r.status_code == 200
         run_id = r.json()["id"]
         assert c.post("/api/searches", json={}).status_code == 409
@@ -35,6 +37,7 @@ def test_search_validates_runs_one_at_a_time_and_streams_until_done(tmp_path: Pa
         assert (body["done"], body["error"]) == (True, "RuntimeError: source en panne")
         assert c.get("/api/searches/inconnu").status_code == 404
     assert (seen[0].days, seen[0].google.enabled, seen[0].origins) == (5, True, ["RIX"])
+    assert (seen[0].kiwi.enabled, seen[0].kiwi.returns) == (False, 10)  # le reste gardé
 
 
 def test_finished_search_keeps_its_top_10_on_disk(tmp_path: Path) -> None:

@@ -1,4 +1,4 @@
-"""Les trois sources « depuis X vers n'importe où ». Chaque fonction est synchrone (les libs le
+"""Les sources « depuis X vers n'importe où ». Chaque fonction est synchrone (les libs le
 sont) et renvoie (tarifs, requêtes envoyées) ; `run` les lance dans des threads."""
 
 import datetime as dt
@@ -7,10 +7,11 @@ import logging
 import re
 from collections.abc import Callable
 from decimal import Decimal
+from itertools import zip_longest
 from typing import Any
 
 from cheaphops.lastminute import cache
-from cheaphops.lastminute.fares import Fare
+from cheaphops.lastminute.fares import Fare, best_per_route
 from cheaphops.lastminute.fx import Fx
 
 log = logging.getLogger("cheaphops.lastminute")
@@ -303,3 +304,191 @@ def _google_fare(r: Any, o: str, d: str, url: str) -> Fare | None:
     dep = r.flights[0].departure
     when = dt.datetime(*dep.date, *dep.time)
     return Fare("google", airline, o, d, when, Decimal(r.price), None, url, True)
+
+
+AIRBALTIC = "https://www.airbaltic.com"
+
+
+def airbaltic(
+    origins: list[str], aim: list[str], spans: list[tuple[dt.date, dt.date]], budget: int,
+    pause: Pause,
+) -> tuple[list[Fare], int]:  # fmt: skip
+    """API du site (GET publics, sans navigateur) : les routes directes (orig-dest), puis le prix
+    de chaque jour sur un an, une requête par route et par sens. Allers de toutes les routes,
+    puis retours des moins chères, dans `budget` requêtes."""
+    from primp import Client
+
+    client, sent = Client(impersonate="chrome_145", impersonate_os="windows"), [0]
+
+    def get(path: str, **params: str) -> Any:
+        data = cache.get("airbaltic", path, params)
+        if data is None:
+            if sent[0]:
+                pause()
+            sent[0] += 1
+            data = json.loads(client.get(f"{AIRBALTIC}/api/{path}", params=params).text)
+            cache.put(data, "airbaltic", path, params)
+        return data
+
+    def days(o: str, d: str) -> list[Fare]:
+        data = get("fsf/outbound", flightMode="oneway", origin=o, destin=d)
+        return [f for f in parse_airbaltic(data, o, d) if any(a <= f.day <= b for a, b in spans)]
+
+    routes = airbaltic_routes(get("orig-dest/en"), origins, aim)
+    room = budget - sent[0]
+    outs = [f for o, d in routes[:room] for f in days(o, d)]
+    cheapest = best_per_route(outs)[: max(budget - sent[0], 0)]
+    backs = [b for f in cheapest for b in days(f.destination, f.origin)]
+    return outs + backs, sent[0]
+
+
+def airbaltic_routes(od: Any, origins: list[str], aim: list[str]) -> list[tuple[str, str]]:
+    """(origine, destination) des vols directs airBaltic, les origines servies à tour de rôle (un
+    budget court ne doit pas tout donner à RIX)."""
+    by_origin: dict[str, list[str]] = {o: [] for o in origins}
+    for key, v in od["destinData"].items():
+        d = key[:-1]  # « CPHA » : code + type (A : aéroport)
+        if not key.endswith("A") or d in origins or (aim and d not in aim):
+            continue
+        for o in origins:
+            if (v["btDest"].get(o + "A") or v["nonBtDest"].get(o + "A") or {}).get("hasBTDirect"):
+                by_origin[o].append(d)
+    rounds = zip_longest(*([(o, d) for d in ds] for o, ds in by_origin.items()))
+    return [r for group in rounds for r in group if r]
+
+
+def parse_airbaltic(data: Any, o: str, d: str) -> list[Fare]:
+    """Prix au jour (sans heure) ; null : pas de vol. « isDirect » faux : escale airBaltic à Riga,
+    même billet."""
+    if not data.get("success"):  # route inconnue : {"success": false, "error": ...}
+        return []
+    fares = []
+    for x in data.get("data") or []:
+        price = x.get("updatedPrice") or x["price"]
+        if price:
+            url = (f"{AIRBALTIC}/en/book-flight?originCode={o}&destinCode={d}&originType=A"
+                   f"&destinType=A&tripType=oneway&departure={x['date']}&numAdt=1")  # fmt: skip
+            fares.append(Fare("airbaltic", "airBaltic", o, d, dt.datetime.fromisoformat(x["date"]),
+                              Decimal(str(price)), None, url))  # fmt: skip
+    return fares
+
+
+KIWI = "https://api.skypicker.com/umbrella/v2/graphql"
+# Ryanair, Malta Air, Buzz, Lauda, Ryanair UK et Wizz (Hongrie, UK, Malte) : déjà lus en direct
+KIWI_COVERED = ["FR", "AL", "RR", "OE", "RK", "W6", "W9", "W4"]
+_KIWI_ARGS = (
+    "($search: SearchOnewayInput, $filter: ItinerariesFilterInput,"
+    " $options: ItinerariesOptionsInput)"
+)
+_KIWI_IN = "(search: $search, filter: $filter, options: $options)"
+_KIWI_END = "station { code city { slug } } localTime"
+_KIWI_ERR = "__typename ... on AppError { error: message }"
+KIWI_PER_CITY = (
+    f"query OnePerCity{_KIWI_ARGS} {{ onewayOnePerCityItineraries{_KIWI_IN} {{ {_KIWI_ERR}"
+    " ... on OnePerCityItineraries { itineraries { ... on OnewayOnePerCityItinerary {"
+    f" price {{ amount }} source {{ {_KIWI_END} }} destination {{ {_KIWI_END} }} }} }} }} }} }}"
+)
+KIWI_ONEWAY = (
+    f"query OneWay{_KIWI_ARGS} {{ onewayItineraries{_KIWI_IN} {{ {_KIWI_ERR}"
+    " ... on Itineraries { itineraries { ... on ItineraryOneWay { price { amount }"
+    " sector { sectorSegments { segment {"
+    f" source {{ {_KIWI_END} }} destination {{ {_KIWI_END} }} carrier {{ code name }} code"
+    " } } } } } } } }"
+)
+
+
+def kiwi(
+    origins: list[str], aim: list[str], spans: list[tuple[dt.date, dt.date]], returns: int,
+    pause: Pause,
+) -> tuple[list[Fare], int]:  # fmt: skip
+    """GraphQL de kiwi.com (sans jeton ni navigateur), prix indicatifs. Par plage : n'importe où,
+    le moins cher par ville, puis le retour des `returns` destinations les moins chères ; en mode
+    cibles, aller et retour vers chaque cible. Ryanair et Wizz sont exclus : lus en direct."""
+    from primp import Client
+
+    client, sent = Client(impersonate="chrome_145", impersonate_os="windows"), [0]
+
+    def ask(query: str, src: list[str], dst: list[str], a: dt.date, b: dt.date) -> list[Any]:
+        var = _kiwi_vars(src, dst, a, b)
+        data = cache.get("kiwi", query, var)
+        if data is None:
+            if sent[0]:
+                pause()
+            sent[0] += 1
+            r = client.post(KIWI, json={"query": query, "variables": var},
+                            headers={"origin": "https://www.kiwi.com"})  # fmt: skip
+            data = json.loads(r.text)["data"]
+            cache.put(data, "kiwi", query, var)
+        node = next(iter(data.values()))
+        if "itineraries" not in node:  # AppError : cette requête seulement
+            log.info("kiwi %s -> %s : %s", src, dst, node.get("error"))
+            return []
+        return list(node["itineraries"])
+
+    home = [f"Station:airport:{o}" for o in origins]
+    fares: list[Fare] = []
+    for a, b in spans:
+        for t in aim:
+            there = [f"Station:airport:{t}"]
+            fares += [parse_kiwi(x) for x in ask(KIWI_ONEWAY, home, there, a, b)]
+            fares += [parse_kiwi(x) for x in ask(KIWI_ONEWAY, there, home, a, b)]
+        if aim:
+            continue
+        found = [parse_kiwi_city(x) for x in ask(KIWI_PER_CITY, home, ["anywhere"], a, b)]
+        fares += found
+        dests = [f.destination for f in sorted(found, key=lambda f: f.price)
+                 if f.destination not in origins]  # fmt: skip
+        for d in list(dict.fromkeys(dests))[:returns]:
+            fares += [parse_kiwi(x) for x in ask(KIWI_ONEWAY, [f"Station:airport:{d}"], home, a, b)]
+    return fares, sent[0]
+
+
+def _kiwi_vars(src: list[str], dst: list[str], a: dt.date, b: dt.date) -> dict[str, Any]:
+    return {
+        "search": {
+            "itinerary": {
+                "source": {"ids": src}, "destination": {"ids": dst},
+                "outboundDepartureDate": {"start": f"{a}T00:00:00", "end": f"{b}T23:59:59"},
+            },
+            "passengers": {"adults": 1, "children": 0, "infants": 0, "adultsHoldBags": [0],
+                           "adultsHandBags": [0], "childrenHoldBags": [], "childrenHandBags": []},
+            "cabinClass": {"cabinClass": "ECONOMY", "applyMixedClasses": False},
+        },
+        "filter": {
+            "allowChangeInboundDestination": True, "allowChangeInboundSource": True,
+            "allowDifferentStationConnection": False, "enableSelfTransfer": True,
+            "enableThrowAwayTicketing": False, "enableTrueHiddenCity": False,
+            "transportTypes": ["FLIGHT"], "contentProviders": ["KIWI"], "limit": 100,
+            "excludeCarriers": KIWI_COVERED,
+        },
+        "options": {"sortBy": "PRICE", "currency": "eur", "locale": "en", "partner": "skypicker",
+                    "market": "fr", "partnerMarket": "fr", "storeSearch": False},
+    }  # fmt: skip
+
+
+def _kiwi_url(src: Any, dst: Any, day: dt.date) -> str:
+    """Page de résultats du jour : stable, contrairement au lien de réservation (jeton)."""
+    a, b = src["station"]["city"]["slug"], dst["station"]["city"]["slug"]
+    return f"https://www.kiwi.com/en/search/results/{a}/{b}/{day}/no-return"
+
+
+def parse_kiwi_city(x: Any) -> Fare:
+    """Le moins cher vers une ville : sans compagnie (Kiwi ne la donne pas ici)."""
+    s, d = x["source"], x["destination"]
+    dep = dt.datetime.fromisoformat(s["localTime"])
+    return Fare("kiwi", "Kiwi.com", s["station"]["code"], d["station"]["code"], dep,
+                Decimal(x["price"]["amount"]), None, _kiwi_url(s, d, dep.date()), True,
+                dt.datetime.fromisoformat(d["localTime"]))  # fmt: skip
+
+
+def parse_kiwi(x: Any) -> Fare:
+    """Un itinéraire vendu par Kiwi, direct ou avec escale (un seul achat chez Kiwi)."""
+    segs = [s["segment"] for s in x["sector"]["sectorSegments"]]
+    first, end = segs[0], segs[-1]
+    dep = dt.datetime.fromisoformat(first["source"]["localTime"])
+    airline = " + ".join(dict.fromkeys(s["carrier"]["name"] for s in segs))
+    flight = f"{first['carrier']['code']}{first['code']}" if len(segs) == 1 else None
+    return Fare("kiwi", airline, first["source"]["station"]["code"],
+                end["destination"]["station"]["code"], dep, Decimal(x["price"]["amount"]), flight,
+                _kiwi_url(first["source"], end["destination"], dep.date()), True,
+                dt.datetime.fromisoformat(end["destination"]["localTime"]))  # fmt: skip

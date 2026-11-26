@@ -41,6 +41,8 @@ class SearchRequest(BaseModel):
     destinations: list[str] | None = None  # [] : n'importe où
     max_nights: int | None = None
     google: bool | None = None
+    airbaltic: bool | None = None
+    kiwi: bool | None = None
     weekend: bool | None = None
     connections: bool | None = None
 
@@ -95,8 +97,9 @@ def create_app(
             raise HTTPException(409, "une recherche est déjà en cours")
         base = load_config(config_path).lastminute
         update = req.model_dump(exclude_none=True)
-        if "google" in update:
-            update["google"] = {"enabled": update["google"]}
+        for source in ("google", "airbaltic", "kiwi"):  # case cochée -> {"enabled": ...}
+            if source in update:
+                update[source] = {"enabled": update[source]}
         try:
             params = with_overrides(base, update)
             windows_for(params, today())
