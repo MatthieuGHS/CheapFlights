@@ -20,7 +20,7 @@ from typing import Any
 from ryanair import Ryanair
 
 from cheaphops.core.config import Ground, LastMinute
-from cheaphops.lastminute import airports, generic, sources
+from cheaphops.lastminute import airports, cache, generic, sources
 from cheaphops.lastminute.fares import (
     Bus,
     Calendar,
@@ -301,6 +301,7 @@ async def run(
     reports: dict[str, SourceReport] = {}
     modes: dict[str, str] = {}
     rates = fx if fx is not None else await asyncio.to_thread(load_fx)
+    cache.TTL_S = cfg.cache_minutes * 60
 
     def pause() -> None:  # appelé depuis les threads des sources : time.sleep ne bloque que le leur
         time.sleep(random.uniform(*cfg.pause_s))
@@ -465,12 +466,12 @@ async def run(
         hub_days = _hub_days(firsts)[: max(left, 0)]
 
         def hub_out() -> tuple[list[Fare], int]:
-            got = []
+            got, before = [], api.num_queries
             for i, (hub, day) in enumerate(hub_days):
                 if i:
                     pause()
                 got += sources.ryanair(api, hub, day, day)
-            return got, len(hub_days)
+            return got, api.num_queries - before
 
         seconds = await call("ryanair", hub_out) if hub_days else []
         direct = {f.destination for f in outs}
@@ -487,7 +488,7 @@ async def run(
         hubs = sorted({c.legs[0].destination for c in legs})
 
         def hub_back() -> tuple[list[Fare], int]:
-            got, sent = [], 0
+            got, before = [], api.num_queries
             for c in legs:  # le vol destination -> hub le moins cher dans les nuits permises
                 end = next(w.end for w in windows if w.allows_out(c.day))
                 span = min(c.day + timedelta(days=cfg.max_nights), end)
@@ -497,8 +498,8 @@ async def run(
                     for f in sources.ryanair(api, c.destination, c.day, span)
                     if f.destination == hub
                 ]
-                sent += 1
                 pause()
+            sent = api.num_queries - before  # oneWayFares : les réponses en cache ne comptent pas
             for hub in hubs:
                 for home in cfg.origins:
                     try:
@@ -507,6 +508,7 @@ async def run(
                         )
                     except Exception as e:  # pas de vol hub -> cet aéroport
                         log.info("calendrier Ryanair %s-%s: %s", hub, home, e)
+                        sent += 1  # la requête refusée est partie quand même
                         continue
                     got += cal
                     sent += n_req

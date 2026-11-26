@@ -20,6 +20,7 @@ lastminute:
   verify_routes: 30        # routes trouvées par un agrégateur dont le calendrier est lu chez Ryanair/Wizz
   wizz_routes: 30          # routes Wizz dont on lit les prix par jour (farechart, 1 POST chacune)
   pause_s: [0.3, 0.9]      # pause aléatoire entre deux requêtes d'une même source
+  cache_minutes: 60        # une recherche relancée dans l'heure ne repaie pas ses requêtes
   request_budget: 320      # requêtes réseau max par recherche, toutes sources
   google:                  # complément : compagnies que Ryanair/Wizz ne couvrent pas
     enabled: false         # --google (CLI) ou case à cocher (UI) pour l'activer

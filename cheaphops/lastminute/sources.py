@@ -9,6 +9,7 @@ from collections.abc import Callable
 from decimal import Decimal
 from typing import Any
 
+from cheaphops.lastminute import cache
 from cheaphops.lastminute.fares import Fare
 from cheaphops.lastminute.fx import Fx
 
@@ -29,17 +30,20 @@ def ryanair(api: Any, airport: str, d0: dt.date, d1: dt.date) -> list[Fare]:
     """oneWayFares (farfnd, comme ryanair-py) : une requête par aéroport, le moins cher vers
     chaque destination entre d0 et d1 (EUR), avec l'heure d'arrivée que la lib jette.
     `api` est un `ryanair.Ryanair(currency="EUR")` : on garde sa session et ses reprises."""
-    data = api._retryable_query(
-        "https://services-api.ryanair.com/farfnd/v4/oneWayFares",
-        {
-            "departureAirportIataCode": airport,
-            "outboundDepartureDateFrom": d0.isoformat(),
-            "outboundDepartureDateTo": d1.isoformat(),
-            "outboundDepartureTimeFrom": "00:00",
-            "outboundDepartureTimeTo": "23:59",
-            "currency": "EUR",
-        },
-    )
+    params = {
+        "departureAirportIataCode": airport,
+        "outboundDepartureDateFrom": d0.isoformat(),
+        "outboundDepartureDateTo": d1.isoformat(),
+        "outboundDepartureTimeFrom": "00:00",
+        "outboundDepartureTimeTo": "23:59",
+        "currency": "EUR",
+    }
+    data = cache.get("ryanair", params)  # une réponse en cache ne compte pas dans num_queries
+    if data is None:
+        data = api._retryable_query(
+            "https://services-api.ryanair.com/farfnd/v4/oneWayFares", params
+        )
+        cache.put(data, "ryanair", params)
     return [
         _ryanair_fare(f, f["departureAirport"]["iataCode"], f["arrivalAirport"]["iataCode"],
                       f["flightNumber"].replace(" ", ""))
@@ -58,21 +62,27 @@ def ryanair_calendar(
     """Prix par jour de la route o -> d (farfnd `cheapestPerDay`, une requête par mois), jours
     complets ou indisponibles écartés. Prix réels de la compagnie, avec l'heure du vol."""
     fares: list[Fare] = []
-    for i, month in enumerate(months):
-        if i:
-            pause()
-        r = api.session.get(
-            f"https://services-api.ryanair.com/farfnd/v4/oneWayFares/{o}/{d}/cheapestPerDay",
-            params={"outboundMonthOfDate": month.isoformat(), "currency": "EUR"},
-        )
-        r.raise_for_status()
-        for x in r.json()["outbound"]["fares"] or []:
+    sent = 0
+    for month in months:
+        data = cache.get("ryanair-calendar", o, d, month)
+        if data is None:
+            if sent:
+                pause()
+            sent += 1
+            r = api.session.get(
+                f"https://services-api.ryanair.com/farfnd/v4/oneWayFares/{o}/{d}/cheapestPerDay",
+                params={"outboundMonthOfDate": month.isoformat(), "currency": "EUR"},
+            )
+            r.raise_for_status()
+            data = r.json()
+            cache.put(data, "ryanair-calendar", o, d, month)
+        for x in data["outbound"]["fares"] or []:
             if x["soldOut"] or x["unavailable"] or not _eur(x):
                 continue
             fare = _ryanair_fare(x, o, d)
             if d0 <= fare.day <= last:
                 fares.append(fare)
-    return fares, len(months)
+    return fares, sent
 
 
 def _ryanair_fare(x: dict[str, Any], o: str, d: str, flight_no: str | None = None) -> Fare:
@@ -136,6 +146,9 @@ def wizz(
         raise LookupError("wizzair: version d'API introuvable dans la page")
 
     def post(page: Any, path: str, body: dict[str, Any]) -> str:
+        cached = cache.get("wizzair", path, body)
+        if cached is not None:
+            return str(cached)
         for attempt in range(2):
             if not version:
                 discover(page)
@@ -150,7 +163,10 @@ def wizz(
             if status == 404 and attempt == 0:  # déploiement en cours : version relue
                 version.clear()
                 continue
-            return str(text) if status == 200 else ""
+            if status != 200:
+                return ""
+            cache.put(str(text), "wizzair", path, body)
+            return str(text)
         return ""
 
     def act(page: Any) -> Any:
@@ -259,16 +275,20 @@ def google(
             if d == o:  # une cible qui est aussi une origine
                 continue
             for day in days:
-                if sent:
-                    pause()
-                sent += 1
                 q = create_query(
                     flights=[FlightQuery(date=day.isoformat(), from_airport=o, to_airport=d,
                                          max_stops=0)],
                     currency="EUR", language="en",
                 )  # fmt: skip
+                html = cache.get("google", o, d, day)
+                if html is None:
+                    if sent:
+                        pause()
+                    sent += 1
+                    html = fetcher.fetch_html(q)
                 try:
-                    results = parse(fetcher.fetch_html(q))
+                    results = parse(html)
+                    cache.put(html, "google", o, d, day)  # seulement une page qui se lit
                 except Exception as e:  # une route sans résultat ne doit pas tuer la source
                     log.info("google %s-%s %s: %s", o, d, day, type(e).__name__)
                     continue

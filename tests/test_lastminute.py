@@ -670,3 +670,28 @@ def test_aimed_budget_and_google_return_days_fit_the_trip_rules() -> None:
     window = Window(date(2026, 12, 18), date(2026, 12, 22), date(2026, 12, 22))
     outs = [date(2026, 12, 18), date(2026, 12, 22)]
     assert run_mod._back_days([window], outs, cfg) == [date(2026, 12, d) for d in (19, 20, 21)]
+
+
+def test_cached_airline_answers_are_reused_and_not_counted(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    from cheaphops.lastminute import cache
+
+    monkeypatch.setattr(cache, "TTL_S", 3600)
+    out = {"departureDate": "2026-11-22T08:00:00", "arrivalDate": "2026-11-22T10:00:00",
+           "price": {"value": 19.99, "currencyCode": "EUR"}, "flightNumber": "FR 1",
+           "departureAirport": {"iataCode": "VNO"},
+           "arrivalAirport": {"iataCode": "BGY"}}  # fmt: skip
+    calls: list[str] = []
+
+    def query(url, params):  # type: ignore[no-untyped-def]
+        calls.append(url)
+        return {"fares": [{"outbound": out}]}
+
+    api = SimpleNamespace(_retryable_query=query)
+    first = sources.ryanair(api, "VNO", date(2026, 11, 20), date(2026, 11, 29))
+    again = sources.ryanair(api, "VNO", date(2026, 11, 20), date(2026, 11, 29))
+    assert first == again and len(calls) == 1
+    sources.ryanair(api, "VNO", date(2026, 11, 20), date(2026, 11, 30))  # autre plage : requête
+    assert len(calls) == 2
+    monkeypatch.setattr(cache, "TTL_S", 0)  # coupé : toujours le réseau
+    sources.ryanair(api, "VNO", date(2026, 11, 20), date(2026, 11, 29))
+    assert len(calls) == 3
