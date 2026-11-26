@@ -64,3 +64,29 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .progress::after { animation: none; @apply w-full opacity-40; }
 }
+
+/* Leaflet aux couleurs de l'app ; « .leaflet-container » devant : leaflet.css arrive après */
+.leaflet-container {
+  background: var(--surface);
+  font: inherit;
+}
+.leaflet-container .leaflet-tooltip {
+  @apply rounded border-line bg-surface text-ink shadow-none;
+}
+.leaflet-container .leaflet-tooltip-top::before {
+  border-top-color: var(--line);
+}
+.leaflet-container .leaflet-tooltip.map-label {
+  @apply px-1.5 py-0 text-[11px];
+}
+.leaflet-container .leaflet-bar a,
+.leaflet-container .leaflet-bar a:hover {
+  @apply border-line bg-surface text-ink;
+}
+.leaflet-container .leaflet-control-attribution {
+  background: color-mix(in srgb, var(--surface) 75%, transparent);
+  @apply text-muted;
+}
+.leaflet-container .leaflet-control-attribution a {
+  @apply text-muted;
+}

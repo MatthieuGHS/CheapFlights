@@ -117,6 +117,19 @@ async function call<T>(schema: z.ZodType<T>, url: string, init?: RequestInit): P
 }
 
 export const getConfig = () => call(Config, '/api/config')
+
+export const Airport = z.object({
+  iata: z.string(),
+  city: z.string(), // ville desservie, en français quand Wikidata la connaît
+  name: z.string(),
+  country: z.string(), // code ISO à 2 lettres
+  lat: z.number(),
+  lon: z.number(),
+  size: z.enum(['L', 'M', 'S']),
+  alt: z.array(z.string()), // autres noms : « Milan Bergamo Airport », « Warszawa »…
+})
+export type Airport = z.infer<typeof Airport>
+export const getAirports = () => call(z.array(Airport), '/api/airports')
 export type SearchRequest = {
   days: number
   periods: { start: string; end: string }[] // [] : mode « dans les N jours »
