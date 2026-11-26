@@ -73,7 +73,7 @@ export default function App() {
       })
       .catch((e: unknown) => setError(String(e)))
     getAirports()
-      .then((list) => setIndex(buildIndex(list)))
+      .then((list) => setIndex(list.length ? buildIndex(list) : null)) // vide : table absente côté serveur
       .catch(() => {}) // sans table, le champ accepte encore les codes tapés
     // la dernière recherche sauvegardée, pour ne rien perdre en rechargeant la page
     getHistory()

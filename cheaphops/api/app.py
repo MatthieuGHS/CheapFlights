@@ -11,7 +11,7 @@ from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import Any
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.encoders import jsonable_encoder
 from fastapi.responses import Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
@@ -88,11 +88,13 @@ def create_app(
             r.push({"type": "done", "error": r.error})
 
     @app.get("/api/airports")
-    def get_airports() -> Response:
+    def get_airports(request: Request) -> Response:
+        if "gzip" not in request.headers.get("accept-encoding", ""):
+            return Response(json.dumps(airports.table()), media_type="application/json")
         return Response(
             airports.table_gzip(),
             media_type="application/json",
-            headers={"Content-Encoding": "gzip", "Cache-Control": "max-age=86400"},
+            headers={"Content-Encoding": "gzip", "Vary": "Accept-Encoding"},
         )
 
     @app.get("/api/config")

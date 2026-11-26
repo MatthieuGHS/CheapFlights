@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import type { AirportIndex } from './airports'
@@ -26,6 +26,8 @@ export default function RouteMap({ index, origins, targets, onToggle, full }: Pr
   const map = useRef<L.Map | null>(null)
   const layer = useRef<L.LayerGroup | null>(null)
   const toggle = useRef(onToggle)
+  const fitted = useRef(false)
+  const [theme, setTheme] = useState(0) // change de thème : les couleurs des points sont relues
   useEffect(() => {
     toggle.current = onToggle
   }, [onToggle])
@@ -39,6 +41,7 @@ export default function RouteMap({ index, origins, targets, onToggle, full }: Pr
     const onTheme = () => {
       tiles.remove()
       tiles = L.tileLayer(TILES(media.matches), { attribution: ATTRIBUTION, maxZoom: 12 }).addTo(m)
+      setTheme((t) => t + 1)
     }
     media.addEventListener('change', onTheme)
     layer.current = L.layerGroup().addTo(m)
@@ -90,16 +93,21 @@ export default function RouteMap({ index, origins, targets, onToggle, full }: Pr
     return () => {
       m.off('zoomend', draw)
     }
-  }, [index, origins, targets, full])
+  }, [index, origins, targets, full, theme])
 
-  // cadrer sur la sélection quand elle change
+  // cadrer sur la sélection à l'ouverture, puis seulement si un aéroport choisi sort de la vue :
+  // un clic sur la carte ne doit pas défaire le zoom en cours
   useEffect(() => {
     const m = map.current
     const points = [...origins, ...targets].flatMap((c) => {
       const a = index.byCode.get(c)
       return a ? [L.latLng(a.lat, a.lon)] : []
     })
-    if (m && points.length > 1) m.fitBounds(L.latLngBounds(points), { padding: [40, 40], maxZoom: 7 })
+    if (!m || points.length < 2) return
+    if (!fitted.current || points.some((p) => !m.getBounds().contains(p))) {
+      m.fitBounds(L.latLngBounds(points), { padding: [40, 40], maxZoom: 7 })
+      fitted.current = true
+    }
   }, [index, origins, targets])
 
   return (

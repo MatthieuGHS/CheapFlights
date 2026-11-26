@@ -37,9 +37,9 @@ export function AirportPicker({ label, value, onChange, index, max = Infinity, p
       setOpen(true)
       const step = e.key === 'ArrowDown' ? 1 : -1
       setActive((i) => (options.length ? (i + step + options.length) % options.length : 0))
-    } else if (e.key === 'Enter' && shown) {
-      e.preventDefault() // sinon le formulaire part
-      const pick = options[active]
+    } else if (e.key === 'Enter' && text.trim() !== '') {
+      e.preventDefault() // une saisie en cours ne lance pas la recherche
+      const pick = shown ? options[active] : undefined
       if (pick) add(pick.iata)
       else if (!index && /^[a-z]{3}$/i.test(text.trim())) add(text.trim().toUpperCase())
     } else if (e.key === 'Escape') {
@@ -86,7 +86,8 @@ export function AirportPicker({ label, value, onChange, index, max = Infinity, p
           aria-activedescendant={shown && options[active] ? `${id}-${options[active].iata}` : undefined}
           aria-autocomplete="list"
           value={text}
-          disabled={full}
+          readOnly={full} // pas « disabled » : le focus resterait perdu après le 10e choix
+          aria-disabled={full}
           placeholder={full ? `${max} au maximum` : value.length ? 'Ajouter…' : placeholder}
           onChange={(e) => {
             setText(e.target.value)
@@ -96,35 +97,37 @@ export function AirportPicker({ label, value, onChange, index, max = Infinity, p
           onFocus={() => setOpen(true)}
           onBlur={() => setOpen(false)}
           onKeyDown={onKey}
-          className="min-w-32 flex-1 bg-transparent px-1 py-0.5 text-sm outline-none placeholder:text-muted disabled:cursor-not-allowed"
+          className="min-w-32 flex-1 bg-transparent px-1 py-0.5 text-sm outline-none placeholder:text-muted read-only:cursor-not-allowed"
         />
       </div>
-      {shown && (
-        <ul id={`${id}-list`} role="listbox" aria-label={label} className="absolute z-20 mt-1 max-h-80 w-full min-w-72 overflow-y-auto rounded-md border border-line bg-surface py-1 shadow-lg shadow-black/20">
-          {options.length === 0 && <li className="px-3 py-2 text-sm text-muted">{index ? 'Aucun aéroport ne correspond.' : 'Tapez un code à 3 lettres puis Entrée.'}</li>}
-          {options.map((a, i) => (
-            <li
-              key={a.iata}
-              id={`${id}-${a.iata}`}
-              role="option"
-              aria-selected={i === active}
-              onMouseDown={(e) => e.preventDefault()} // garde le focus dans le champ
-              onClick={() => add(a.iata)}
-              onMouseEnter={() => setActive(i)}
-              className={`flex cursor-pointer items-baseline gap-3 px-3 py-1.5 text-sm ${i === active ? 'bg-accent-soft' : ''}`}
-            >
-              <span className="min-w-0 flex-1 truncate">
-                <span className="font-medium">{a.city}</span>
-                <span className="text-muted">
-                  {' '}
-                  {a.name}, {countryName(a.country)}
-                </span>
-              </span>
-              <span className="text-xs text-muted tabular-nums">{a.iata}</span>
-            </li>
-          ))}
-        </ul>
+      {shown && options.length === 0 && (
+        <p role="status" className="absolute z-20 mt-1 w-full min-w-72 rounded-md border border-line bg-surface px-3 py-2 text-sm text-muted shadow-lg shadow-black/20">
+          {index ? 'Aucun aéroport ne correspond.' : 'Tapez un code à 3 lettres puis Entrée.'}
+        </p>
       )}
+      <ul id={`${id}-list`} role="listbox" aria-label={label} hidden={!shown || options.length === 0} className="absolute z-20 mt-1 max-h-80 w-full min-w-72 overflow-y-auto rounded-md border border-line bg-surface py-1 shadow-lg shadow-black/20">
+        {options.map((a, i) => (
+          <li
+            key={a.iata}
+            id={`${id}-${a.iata}`}
+            role="option"
+            aria-selected={i === active}
+            onMouseDown={(e) => e.preventDefault()} // garde le focus dans le champ
+            onClick={() => add(a.iata)}
+            onMouseEnter={() => setActive(i)}
+            className={`flex cursor-pointer items-baseline gap-3 px-3 py-1.5 text-sm ${i === active ? 'bg-accent-soft' : ''}`}
+          >
+            <span className="min-w-0 flex-1 truncate">
+              <span className="font-medium">{a.city}</span>
+              <span className="text-muted">
+                {' '}
+                {a.name}, {countryName(a.country)}
+              </span>
+            </span>
+            <span className="text-xs text-muted tabular-nums">{a.iata}</span>
+          </li>
+        ))}
+      </ul>
     </div>
   )
 }

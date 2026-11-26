@@ -73,3 +73,7 @@ def test_airport_table_is_served_compressed_with_french_city_names(tmp_path: Pat
     table = {a["iata"]: a for a in r.json()}
     assert (table["BGY"]["city"], table["BGY"]["country"]) == ("Bergame", "IT")
     assert table["WMI"]["city"] == "Varsovie" and "Warsaw" in table["WMI"]["alt"]
+    with TestClient(create_app(history_dir=tmp_path)) as c:  # client sans gzip : JSON en clair
+        plain = c.get("/api/airports", headers={"Accept-Encoding": "identity"})
+    assert "content-encoding" not in plain.headers and len(plain.json()) == len(table)
+    assert table["GDN"]["city"] == "Gdańsk" and table["CPH"]["city"] == "Copenhague"

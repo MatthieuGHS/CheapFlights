@@ -14,6 +14,12 @@ export const normalize = (s: string) =>
     .normalize('NFD')
     .replace(/\p{Diacritic}/gu, '')
     .toLowerCase()
+    .replace(/ł/g, 'l') // NFD ne décompose pas ces lettres : « Łódź » -> « lodz »
+    .replace(/[øœ]/g, 'o')
+    .replace(/æ/g, 'ae')
+    .replace(/ß/g, 'ss')
+    .replace(/đ/g, 'd')
+    .replace(/ı/g, 'i')
     .replace(/[^a-z0-9]+/g, ' ')
     .trim()
 
@@ -44,8 +50,9 @@ const SIZE = { L: 0, M: 1, S: 2 } as const
 function rank(e: Entry, q: string): number | null {
   if (e.code === q) return 0
   if (e.city.startsWith(q)) return 1
-  if (e.words.some((w) => w.startsWith(q)) || (q.includes(' ') && e.city.includes(q))) return 2
-  if (e.countries.some((c) => c.startsWith(q))) return 3 // tout le pays : on choisit ensuite
+  if (e.words.includes(q)) return 2 // un autre nom exact : « wien » -> Vienne
+  if (e.words.some((w) => w.startsWith(q)) || (q.includes(' ') && e.city.includes(q))) return 3
+  if (e.countries.some((c) => c.startsWith(q))) return 4 // tout le pays : on choisit ensuite
   return null
 }
 
