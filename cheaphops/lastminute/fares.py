@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta
 from decimal import Decimal
 
-SAME_DAY_GAP = timedelta(hours=6)  # retour le jour même : les horaires d'arrivée manquent
+SAME_DAY_GAP = timedelta(hours=6)  # retour le jour même : au moins ça après l'arrivée connue
 
 
 @dataclass(frozen=True)
@@ -178,7 +178,8 @@ def roundtrips(
         for b in backs_from.get(o.destination, []):
             if not (
                 0 <= (b.day - o.day).days <= max_nights
-                and (b.day > o.day or b.departure - o.departure >= SAME_DAY_GAP)
+                # à défaut d'heure d'arrivée, compté depuis le départ
+                and (b.day > o.day or b.departure - (o.arrival or o.departure) >= SAME_DAY_GAP)
             ):
                 continue
             ok, check = (True, False) if weekend_cutoff is None else weekend_back(b, weekend_cutoff)
@@ -192,9 +193,9 @@ def roundtrips(
 def dedupe(fares: list[Fare]) -> list[Fare]:
     """Un même vol vu par deux requêtes (SmartSearch avec heure, farechart au jour) : on garde
     la version horodatée."""
-    best: dict[tuple[str, str, str, date, Decimal], Fare] = {}
+    best: dict[tuple[str, str, str, date, Decimal, int], Fare] = {}
     for f in fares:
-        k = (f.source, f.origin, f.destination, f.day, f.price)
+        k = (f.source, f.origin, f.destination, f.day, f.price, len(f.legs))  # direct ≠ escale
         if k not in best or (f.departure.time() != datetime.min.time()):
             best[k] = f
     return list(best.values())

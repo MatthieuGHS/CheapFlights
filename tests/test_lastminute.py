@@ -695,3 +695,10 @@ def test_cached_airline_answers_are_reused_and_not_counted(monkeypatch) -> None:
     monkeypatch.setattr(cache, "TTL_S", 0)  # coupé : toujours le réseau
     sources.ryanair(api, "VNO", date(2026, 11, 20), date(2026, 11, 29))
     assert len(calls) == 3
+
+
+def test_same_day_return_counts_from_the_arrival_when_known() -> None:
+    out = _timed("VNO", "SVQ", "2026-11-22T06:00", "2026-11-22T14:30", "40")
+    before_landing = _timed("SVQ", "VNO", "2026-11-22T13:00", "2026-11-22T19:00", "5")
+    evening = _timed("SVQ", "VNO", "2026-11-22T21:00", "2026-11-23T03:00", "5")
+    assert [t.back for t in roundtrips([out], [before_landing, evening], 3, {})] == [evening]

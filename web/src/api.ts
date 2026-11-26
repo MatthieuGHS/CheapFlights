@@ -30,7 +30,7 @@ const Leg = z.object({
   indicative: z.boolean(),
 })
 // `legs` : correspondance sur billets séparés, les deux vols ; vide pour un vol direct
-const Fare = Leg.extend({ legs: z.array(Leg) })
+const Fare = Leg.extend({ legs: z.array(Leg).default([]) }) // absent des historiques d'avant
 export type Fare = z.infer<typeof Fare>
 
 const Bus = z.object({ cost: z.number(), minutes: z.number() })

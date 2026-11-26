@@ -80,9 +80,18 @@ class Result:
 HORIZON_DAYS = 60  # plages au-delà refusées : le budget de requêtes s'étalerait trop
 RESERVE_STEP2 = 25  # requêtes laissées par l'étape 1 à la vérification et aux retours
 RESERVE_RETURNS = 20  # requêtes laissées par la vérification aux retours manquants
-HUBS, HUB_DAYS = 4, 3  # correspondances : hubs explorés, jours d'arrivée lus par hub
-CONNECTION_DESTS = 10  # destinations via un hub dont on cherche le retour
-RESERVE_CONNECTIONS = 45  # ≈ HUBS x HUB_DAYS + CONNECTION_DESTS + calendriers hub -> domicile
+HUBS, HUB_DAYS = 6, 3  # correspondances : hubs explorés, jours d'arrivée lus par hub
+CONNECTION_DESTS = 20  # destinations via un hub dont on cherche le retour
+
+
+def _connection_reserve(cfg: LastMinute, months: int) -> int:
+    """Requêtes gardées pour les correspondances : jours de hub, vols vers le hub, calendriers
+    hub -> chaque origine sur chaque mois."""
+    if not cfg.connections:
+        return 0
+    return HUBS * HUB_DAYS + CONNECTION_DESTS + HUBS * len(cfg.origins) * months
+
+
 log = logging.getLogger("cheaphops.lastminute")
 
 
@@ -196,13 +205,15 @@ def _in_window(d: Deal, windows: list[Window], cfg: LastMinute) -> bool:
     )
 
 
-def _plan(cfg: LastMinute, slices: int, windows: int) -> tuple[int, list[str], int]:
+def _plan(
+    cfg: LastMinute, slices: int, windows: int, months: int = 1
+) -> tuple[int, list[str], int]:
     """Budget de l'étape 1 : (routes Wizz, destinations Google, dates Google). Ryanair et Wizz
     d'abord (leur coût est connu), Google prend ce qu'il reste ; les routes Wizz se réduisent si
     la période est longue (`windows` farecharts par route)."""
     n = len(cfg.origins)
     room = cfg.request_budget - n * slices - RESERVE_STEP2 - (1 + n)
-    room -= RESERVE_CONNECTIONS if cfg.connections else 0
+    room -= _connection_reserve(cfg, months)
     wizz_routes = max(min(cfg.wizz_routes, room // windows), 0)
     g_dests, g_dates = cfg.google.destinations, cfg.google.dates
     g_left = room - wizz_routes * windows if cfg.google.enabled else 0
@@ -219,7 +230,7 @@ def _plan_aimed(
     n = len(cfg.origins)
     room = cfg.request_budget - RESERVE_STEP2
     if cfg.connections:  # recherche des hubs « n'importe où » et correspondances
-        room -= n * slices + RESERVE_CONNECTIONS
+        room -= n * slices + _connection_reserve(cfg, months)
     ry = min(pairs, max(room, 0) // (2 * months))
     room -= ry * 2 * months
     wz = min(pairs, max(room - 1, 0) // charts)
@@ -331,7 +342,7 @@ async def run(
         )
     else:
         ry_pairs = 0
-        wizz_routes, g_dests, g_dates = _plan(cfg, len(ry_windows), charts)
+        wizz_routes, g_dests, g_dates = _plan(cfg, len(ry_windows), charts, len(months))
     if not cfg.google.enabled:
         g_dests = []
 
@@ -447,7 +458,10 @@ async def run(
     }
     costs = {"ryanair": 2 * len(months), "wizzair": charts + 1}
     todo = _pick_verifications(
-        targets, cfg.request_budget - used - RESERVE_RETURNS, cfg.verify_routes, costs
+        targets,
+        cfg.request_budget - used - RESERVE_RETURNS - _connection_reserve(cfg, len(months)),
+        cfg.verify_routes,
+        costs,
     )
 
     async def connect_step(
@@ -484,8 +498,18 @@ async def run(
         best: dict[str, Fare] = {}
         for c in sorted(via, key=lambda c: c.price):
             best.setdefault(c.destination, c)
-        legs = list(best.values())[:CONNECTION_DESTS]
-        hubs = sorted({c.legs[0].destination for c in legs})
+        # retours : 1 requête par destination, plus les calendriers de chaque nouveau hub,
+        # dans ce qui reste du budget
+        left = cfg.request_budget - sum(r.requests for r in reports.values()) - RESERVE_RETURNS
+        legs: list[Fare] = []
+        hubs: list[str] = []
+        for c in list(best.values())[:CONNECTION_DESTS]:
+            hub = c.legs[0].destination
+            cost = 1 + (0 if hub in hubs else len(cfg.origins) * len(months))
+            if cost <= left:
+                legs.append(c)
+                hubs += [] if hub in hubs else [hub]
+                left -= cost
 
         def hub_back() -> tuple[list[Fare], int]:
             got, before = [], api.num_queries
@@ -493,11 +517,14 @@ async def run(
                 end = next(w.end for w in windows if w.allows_out(c.day))
                 span = min(c.day + timedelta(days=cfg.max_nights), end)
                 hub = c.legs[0].destination
-                got += [
-                    f
-                    for f in sources.ryanair(api, c.destination, c.day, span)
-                    if f.destination == hub
-                ]
+                try:
+                    got += [
+                        f
+                        for f in sources.ryanair(api, c.destination, c.day, span)
+                        if f.destination == hub
+                    ]
+                except Exception as e:  # une destination en échec n'annule pas les autres
+                    log.info("Ryanair %s -> %s : %s", c.destination, hub, e)
                 pause()
             sent = api.num_queries - before  # oneWayFares : les réponses en cache ne comptent pas
             for hub in hubs:
@@ -518,7 +545,8 @@ async def run(
         to_hub = [f for f in back if f.destination in hubs]
         home = [f for f in back if f.destination in origins and in_windows(f)]
         # les vols hub -> domicile servent aussi de retours directs aux allers vers le hub
-        via_backs = [*home, *(b for b in connections(to_hub, home, gap) if in_windows(b))]
+        direct_home = [f for f in home if not aim or f.origin in aim]  # le hub n'est pas visé
+        via_backs = [*direct_home, *(b for b in connections(to_hub, home, gap) if in_windows(b))]
         if cutoff is not None:
             via_backs = [b for b in via_backs if weekend_back(b, cutoff)[0]]
         return via, via_backs
