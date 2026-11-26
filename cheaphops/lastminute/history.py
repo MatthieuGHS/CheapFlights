@@ -49,12 +49,14 @@ def entries(directory: Path = HISTORY) -> list[dict[str, Any]]:
     for path in sorted(directory.glob("*.json"), reverse=True):
         try:
             body = json.loads(path.read_text())
-        except (OSError, ValueError):
+            p, r = body["params"], body["result"]
+            totals = [
+                t["out"]["price"] + t["back"]["price"]
+                for q in r["periods"]
+                for t in q["roundtrips"]
+            ]
+        except (OSError, ValueError, KeyError, TypeError):
             continue
-        p, r = body["params"], body["result"]
-        totals = [
-            t["out"]["price"] + t["back"]["price"] for q in r["periods"] for t in q["roundtrips"]
-        ]
         out.append({
             "id": body["id"], "at": body["at"], "origins": p["origins"], "days": p["days"],
             "periods": p["periods"], "weekend": p["weekend"], "best": min(totals, default=None),
@@ -68,4 +70,7 @@ def load(run_id: str, directory: Path = HISTORY) -> dict[str, Any] | None:
     if not ID.fullmatch(run_id):  # l'id finit dans un nom de fichier : rien d'autre ne passe
         return None
     path = next(directory.glob(f"*-{run_id}.json"), None)
-    return json.loads(path.read_text()) if path else None
+    try:
+        return json.loads(path.read_text()) if path else None
+    except (OSError, ValueError):  # fichier abîmé : traité comme absent
+        return None

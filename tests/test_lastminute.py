@@ -470,7 +470,9 @@ def test_weekend_run_filters_fetched_returns(monkeypatch) -> None:  # type: igno
 def test_budget_plan_shrinks_google_then_wizz_and_farechart_covers_the_window() -> None:
     cfg = load_config().lastminute
     google = cfg.google.model_copy(update={"enabled": True, "destinations": ["WAW", "CPH"]})
-    cfg = cfg.model_copy(update={"google": google, "wizz_routes": 5, "request_budget": 60})
+    cfg = cfg.model_copy(
+        update={"google": google, "wizz_routes": 5, "request_budget": 60, "connections": False}
+    )
     # 60 - 3 origines x 2 tranches - 25 réservées - 4 = 25 : Wizz 5, Google 2 dates x 2 x 3
     assert run_mod._plan(cfg, slices=2, windows=1) == (5, ["WAW", "CPH"], 2)
     assert run_mod._plan(cfg.model_copy(update={"request_budget": 45}), 2, 1) == (5, ["WAW"], 1)
@@ -557,6 +559,7 @@ def test_aimed_destinations_read_daily_prices_on_those_routes_only(monkeypatch) 
 
     cfg = with_overrides(load_config().lastminute, {
         "pause_s": (0, 0), "days": 10, "origins": ["VNO"], "destinations": ["BGY"],
+        "connections": False,
         "google": {"enabled": True, "dates": 1},
     })  # fmt: skip
     calendars: list[tuple[str, str]] = []
@@ -594,3 +597,76 @@ def test_aimed_destinations_read_daily_prices_on_those_routes_only(monkeypatch) 
     assert google_calls == [(["VNO"], ["BGY"]), (["BGY"], ["VNO"])]  # aller puis retour
     assert [(t.out.destination, t.total) for t in r.periods[0].roundtrips] == [("BGY", Decimal(40))]
     assert all(f.destination != "ATH" for f in r.oneways)  # hors cible : écarté
+
+
+def _timed(o: str, d: str, dep: str, arr: str, price: str) -> Fare:
+    return replace(
+        fare(o, d, dep[:10], price, hour=0),
+        departure=datetime.fromisoformat(dep),
+        arrival=datetime.fromisoformat(arr),
+    )
+
+
+def test_connections_need_same_airport_same_day_and_the_minimum_gap() -> None:
+    from cheaphops.lastminute.fares import connections
+
+    first = _timed("VNO", "BGY", "2026-11-22T06:00", "2026-11-22T08:00", "20")
+    ok = _timed("BGY", "SVQ", "2026-11-22T11:30", "2026-11-22T14:00", "25")
+    tight = _timed("BGY", "BCN", "2026-11-22T10:00", "2026-11-22T11:30", "5")  # 2 h d'escale
+    overnight = _timed("BGY", "OPO", "2026-11-23T07:00", "2026-11-23T09:00", "5")
+    day_only = fare("BGY", "MAD", "2026-11-22", "5", hour=0)  # prix au jour : heure inconnue
+    home = _timed("BGY", "VNO", "2026-11-22T12:00", "2026-11-22T15:00", "5")
+    (c,) = connections([first], [ok, tight, overnight, day_only, home], timedelta(hours=3))
+    assert (c.origin, c.destination, c.price, c.legs) == ("VNO", "SVQ", Decimal(45), (first, ok))
+    assert (c.departure, c.arrival) == (first.departure, ok.arrival)
+
+
+def test_run_finds_round_trips_through_a_hub_both_ways(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    from cheaphops.core.config import with_overrides
+
+    cfg = with_overrides(load_config().lastminute, {
+        "pause_s": (0, 0), "days": 5, "origins": ["VNO"], "connections": True,
+    })  # fmt: skip
+    out1 = _timed("VNO", "BGY", "2026-11-22T06:00", "2026-11-22T08:00", "20")
+    out2 = _timed("BGY", "SVQ", "2026-11-22T12:00", "2026-11-22T14:30", "25")
+    back1 = _timed("SVQ", "BGY", "2026-11-24T07:00", "2026-11-24T09:30", "30")
+    back2 = _timed("BGY", "VNO", "2026-11-24T15:00", "2026-11-24T18:00", "15")
+
+    def fake_ry(api, airport, d0, d1):  # type: ignore[no-untyped-def]
+        api.num_queries += 1
+        found = {"VNO": [out1], "BGY": [out2], "SVQ": [back1]}.get(airport, [])
+        return [f for f in found if d0 <= f.day <= d1]
+
+    def calendar(api, o, d, months, d0, last, pause):  # type: ignore[no-untyped-def]
+        if (o, d) != ("BGY", "VNO"):
+            raise LookupError("pas de vol")
+        return [back2], len(months)
+
+    monkeypatch.setattr(sources, "ryanair", fake_ry)
+    monkeypatch.setattr(sources, "ryanair_calendar", calendar)
+    monkeypatch.setattr(sources, "wizz", lambda *a, **k: ([], 1))
+    monkeypatch.setattr(generic, "load_sources", lambda: [])
+    monkeypatch.setattr(run_mod, "Ryanair", lambda currency: SimpleNamespace(num_queries=0))
+    ground = Ground.model_validate({"home": "VNO", "buses": {}})
+
+    r = asyncio.run(run_mod.run(cfg, ground, date(2026, 11, 20), fx=FX))
+    trips = {t.out.destination: t for t in r.periods[0].roundtrips}
+    svq = trips["SVQ"]
+    assert (svq.out.legs, svq.back.legs, svq.total) == ((out1, out2), (back1, back2), Decimal(90))
+    assert trips["BGY"].total == Decimal(35)  # le retour direct du hub sert aussi l'aller simple
+
+
+def test_aimed_budget_and_google_return_days_fit_the_trip_rules() -> None:
+    from cheaphops.core.config import with_overrides
+
+    base = load_config().lastminute
+    cfg = with_overrides(base, {"request_budget": 320, "connections": False, "max_nights": 3,
+                                "google": {"enabled": True, "dates": 2}})  # fmt: skip
+    aim = [f"T{i:02d}"[:3] for i in range(10)]
+    # 3 origines x 10 cibles, 3 mois, 4 farecharts : Ryanair 180, il reste 115 pour Wizz et Google
+    ry, wz, g_dests, g_dates = run_mod._plan_aimed(cfg, aim, 30, 3, 4, 2)
+    assert (ry, wz) == (30, 28) and g_dests == [] and g_dates == 1
+    assert 30 * 2 * 3 + wz * 4 + 1 + 2 * 3 * len(g_dests) * g_dates <= 320 - run_mod.RESERVE_STEP2
+    window = Window(date(2026, 12, 18), date(2026, 12, 22), date(2026, 12, 22))
+    outs = [date(2026, 12, 18), date(2026, 12, 22)]
+    assert run_mod._back_days([window], outs, cfg) == [date(2026, 12, d) for d in (19, 20, 21)]

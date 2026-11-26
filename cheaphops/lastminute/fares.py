@@ -48,10 +48,39 @@ class Fare:
     url: str | None
     indicative: bool = False  # prix d'un agrégateur, non vérifié chez la compagnie
     arrival: datetime | None = None  # heure locale d'arrivée, quand la source la donne
+    # correspondance sur billets séparés : les deux vols ; vide pour un vol direct
+    legs: tuple["Fare", ...] = ()
 
     @property
     def day(self) -> date:
         return self.departure.date()
+
+
+def chain(a: "Fare", b: "Fare") -> "Fare":
+    """Deux vols bout à bout vus comme un seul aller : prix additionnés, départ du premier,
+    arrivée du second. Chaque billet garde son lien dans `legs`."""
+    airline = a.airline if a.airline == b.airline else f"{a.airline} + {b.airline}"
+    return Fare(a.source, airline, a.origin, b.destination, a.departure, a.price + b.price, None,
+                None, a.indicative or b.indicative, b.arrival, (a, b))  # fmt: skip
+
+
+def connections(firsts: list["Fare"], seconds: list["Fare"], min_gap: timedelta) -> list["Fare"]:
+    """Correspondances au même aéroport, le même jour (pas de nuit sur place), avec au moins
+    `min_gap` entre l'arrivée du premier vol et le départ du second. Il faut l'heure d'arrivée
+    du premier et l'heure de départ du second : un prix « au jour » ne suffit pas."""
+    from_hub: dict[str, list[Fare]] = {}
+    for b in seconds:
+        if b.departure.time() != time(0):
+            from_hub.setdefault(b.origin, []).append(b)
+    return [
+        chain(a, b)
+        for a in firsts
+        if a.arrival is not None
+        for b in from_hub.get(a.destination, [])
+        if b.destination != a.origin
+        and b.departure.date() == a.arrival.date()
+        and b.departure - a.arrival >= min_gap
+    ]
 
 
 @dataclass(frozen=True)

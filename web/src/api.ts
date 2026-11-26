@@ -8,6 +8,7 @@ export const Config = z.object({
   days: z.number(),
   periods: z.array(z.object({ start: z.string(), end: z.string() })),
   destinations: z.array(z.string()),
+  connections: z.boolean(),
   google: z.object({ enabled: z.boolean() }),
   max_nights: z.number(),
   weekend: z.boolean(),
@@ -16,17 +17,20 @@ export const Config = z.object({
 })
 export type Config = z.infer<typeof Config>
 
-const Fare = z.object({
+const Leg = z.object({
   source: z.string(),
   airline: z.string(),
   origin: z.string(),
   destination: z.string(),
   departure: z.string(),
+  arrival: z.string().nullable(),
   price: z.number(),
   flight_no: z.string().nullable(),
   url: z.string().nullable(),
   indicative: z.boolean(),
 })
+// `legs` : correspondance sur billets séparés, les deux vols ; vide pour un vol direct
+const Fare = Leg.extend({ legs: z.array(Leg) })
 export type Fare = z.infer<typeof Fare>
 
 const Bus = z.object({ cost: z.number(), minutes: z.number() })
@@ -116,6 +120,7 @@ export type SearchRequest = {
   periods: { start: string; end: string }[] // [] : mode « dans les N jours »
   origins: string[]
   destinations: string[] // [] : n'importe où
+  connections: boolean
   max_nights: number
   google: boolean
   weekend: boolean

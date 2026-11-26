@@ -49,6 +49,8 @@ class LastMinute(Model):
     periods: list[Period]  # plages choisies au calendrier ; vide : mode « J+0 à J+days »
     # aéroports visés ; vide : n'importe où. Borné : chaque cible coûte des requêtes par origine
     destinations: Annotated[list[Iata], Field(max_length=10)]
+    connections: bool  # vols avec une escale (billets séparés) via les hubs les moins chers
+    connection_min_hours: Annotated[float, Field(ge=1)]  # escale minimale, même aéroport, même jour
     max_nights: Annotated[int, Field(ge=0)]
     weekend: bool  # départ vendredi/samedi, retour dimanche ou lundi avant `weekend_return_before`
     weekend_return_before: time  # heure locale d'arrivée du retour du lundi

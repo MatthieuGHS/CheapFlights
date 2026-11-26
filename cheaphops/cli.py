@@ -17,7 +17,8 @@ from cheaphops.lastminute.run import Result, run, windows_for
 
 def _fare(f: Fare) -> str:
     fmt = "%a %d/%m" if f.source == "wizzair" else "%a %d/%m %H:%M"  # Wizz : prix au jour
-    line = f"{f.origin}->{f.destination} {f.departure.strftime(fmt)} {f.airline} {f.price} €"
+    via = f" via {f.legs[0].destination}" if f.legs else ""  # billets séparés, non protégés
+    line = f"{f.origin}->{f.destination}{via} {f.departure.strftime(fmt)} {f.airline} {f.price} €"
     return f"{line} [{f.source}, {'indicatif' if f.indicative else 'vérifié'}]"
 
 
@@ -133,7 +134,10 @@ def main(argv: list[str] | None = None) -> int:
         ap.error(str(e))
     result = asyncio.run(run(lm, load_ground(), date.today(), lambda e: print(e, file=sys.stderr)))
     print(render(result, all_dates=args.all_dates))
-    print(f"Top 10 sauvé : {history.save(uuid.uuid4().hex[:12], datetime.now(), lm, result)}")
+    try:
+        print(f"Top 10 sauvé : {history.save(uuid.uuid4().hex[:12], datetime.now(), lm, result)}")
+    except OSError as e:  # les résultats sont déjà affichés : on prévient sans échouer
+        print(f"Historique non sauvé : {e}", file=sys.stderr)
     return 0
 
 

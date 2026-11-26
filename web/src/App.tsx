@@ -40,6 +40,7 @@ export default function App() {
   const [aimed, setAimed] = useState(false)
   const [google, setGoogle] = useState(false)
   const [weekend, setWeekend] = useState(false)
+  const [connections, setConnections] = useState(true)
   const [runId, setRunId] = useState<string | null>(null)
   const [events, setEvents] = useState<SearchEvent[]>([])
   const [status, setStatus] = useState<Status | null>(null)
@@ -60,6 +61,7 @@ export default function App() {
         setAimed(c.destinations.length > 0)
         setGoogle(c.google.enabled)
         setWeekend(c.weekend)
+        setConnections(c.connections)
       })
       .catch((e: unknown) => setError(String(e)))
     // la dernière recherche sauvegardée, pour ne rien perdre en rechargeant la page
@@ -89,7 +91,7 @@ export default function App() {
     const periods = mode === 'dates' ? toPeriods([...picked].filter((d) => d >= today)) : []
     const codes = (text: string) => text.split(',').map((s) => s.trim().toUpperCase()).filter(Boolean)
     const destinations = aimed ? codes(targets) : []
-    startSearch({ days, periods, max_nights: nights, google, weekend, origins: codes(origins), destinations })
+    startSearch({ days, periods, max_nights: nights, google, weekend, origins: codes(origins), destinations, connections })
       .then((r) => setRunId(r.id))
       .catch((e: unknown) => setError(String(e)))
   }
@@ -207,6 +209,10 @@ export default function App() {
               <label className="flex items-center gap-2">
                 <input type="checkbox" checked={weekend} onChange={(e) => setWeekend(e.target.checked)} className="accent-accent" />
                 Week-end seulement
+              </label>
+              <label className="flex items-center gap-2">
+                <input type="checkbox" checked={connections} onChange={(e) => setConnections(e.target.checked)} className="accent-accent" />
+                Avec correspondances
               </label>
               <label className="flex items-center gap-2">
                 <input type="checkbox" checked={google} onChange={(e) => setGoogle(e.target.checked)} className="accent-accent" />

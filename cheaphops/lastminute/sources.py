@@ -256,6 +256,8 @@ def google(
     fetcher, fares, sent = Consent(), [], 0
     for o in origins:
         for d in destinations:
+            if d == o:  # une cible qui est aussi une origine
+                continue
             for day in days:
                 if sent:
                     pause()

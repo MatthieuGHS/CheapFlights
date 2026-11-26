@@ -42,6 +42,7 @@ class SearchRequest(BaseModel):
     max_nights: int | None = None
     google: bool | None = None
     weekend: bool | None = None
+    connections: bool | None = None
 
 
 @dataclass
@@ -75,7 +76,7 @@ def create_app(
             r.result = await search(r.params, load_ground(ground_path), today(), r.push)
             try:  # l'historique ne doit pas faire échouer une recherche réussie
                 history.save(r.id, datetime.now(), r.params, r.result, history_dir)
-            except OSError:
+            except Exception:  # disque plein, sérialisation… : le résultat reste affiché
                 log.exception("historique %s", r.id)
         except Exception as e:  # une recherche qui plante ne doit pas tuer le serveur
             log.exception("recherche %s", r.id)

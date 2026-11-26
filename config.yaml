@@ -6,6 +6,8 @@ log_level: INFO
 lastminute:
   origins: [VNO, KUN, RIX]
   days: 10                 # départs de J+0 à J+days (60 max)
+  connections: true        # vols avec une escale sur billets séparés (non protégée)
+  connection_min_hours: 3  # escale minimale ; jamais de nuit sur place
   destinations: []         # aéroports visés, ex. [BGY, BCN] ; vide : n'importe où
   periods: []              # ou des plages précises : [{start: 2026-12-30, end: 2027-01-02}]
   max_nights: 3

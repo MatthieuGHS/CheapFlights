@@ -38,12 +38,43 @@ const Indicative = ({ source }: { source: string }) => (
   </span>
 )
 
-const Book = ({ url }: { url: string | null }) =>
+const Book = ({ url, label = 'Réserver' }: { url: string | null; label?: string }) =>
   url ? (
     <a href={url} target="_blank" rel="noreferrer" className="text-accent underline-offset-2 hover:underline">
-      Réserver
+      {label}
     </a>
   ) : null
+
+/** Une réservation par billet : une correspondance en a deux. */
+const Links = ({ f }: { f: Fare }) =>
+  f.legs.length ? (
+    <span className="flex gap-2 whitespace-nowrap">
+      <Book url={f.legs[0]!.url} label="Vol 1" />
+      <Book url={f.legs[1]!.url} label="Vol 2" />
+    </span>
+  ) : (
+    <Book url={f.url} />
+  )
+
+const minutes = (m: number) => `${Math.floor(m / 60)} h ${String(m % 60).padStart(2, '0')}`
+
+/** Escale d'une correspondance, et le risque : deux billets, aucune garantie si le premier vol a du retard. */
+function Via({ f }: { f: Fare }) {
+  const [a, b] = f.legs
+  if (!a || !b || !a.arrival) return null
+  const wait = Math.round((Date.parse(b.departure) - Date.parse(a.arrival)) / 6e4)
+  return (
+    <span className="block text-xs text-muted">
+      via <Place code={a.destination} />, escale {minutes(wait)}{' '}
+      <span
+        className="rounded bg-warn-soft px-1.5 py-0.5 whitespace-nowrap text-warn"
+        title="Deux billets séparés : si le premier vol a du retard, la compagnie ne garantit pas le second"
+      >
+        correspondance non protégée
+      </span>
+    </span>
+  )
+}
 
 /** Une jambe alignée en colonnes : date, trajet, puis compagnie et lien (en dessous sur mobile). */
 const Leg = ({ f, note }: { f: Fare; note?: string }) => (
@@ -51,13 +82,14 @@ const Leg = ({ f, note }: { f: Fare; note?: string }) => (
     <span className="text-muted">{when(f)}</span>
     <span>
       <Place code={f.origin} /> → <Place code={f.destination} />
+      <Via f={f} />
     </span>
     <span className="col-span-2 flex flex-wrap items-center gap-x-2 gap-y-1 sm:col-span-1">
       {note ?? f.airline}
       {f.indicative && !note && <Indicative source={f.source} />}
       {!note && (
         <span className="ml-auto">
-          <Book url={f.url} />
+          <Links f={f} />
         </span>
       )}
     </span>
@@ -65,8 +97,7 @@ const Leg = ({ f, note }: { f: Fare; note?: string }) => (
 )
 
 const total = (t: RoundTrip) => t.out.price + t.back.price // vols seulement
-const hours = (b: Bus) => `${Math.floor(b.minutes / 60)} h ${String(b.minutes % 60).padStart(2, '0')}`
-const busText = (b: Bus) => `Bus en plus : ${eur0.format(b.cost)}, ${hours(b)}`
+const busText = (b: Bus) => `Bus en plus : ${eur0.format(b.cost)}, ${minutes(b.minutes)}`
 const nights = (t: RoundTrip) =>
   Math.round((Date.parse(t.back.departure.slice(0, 10)) - Date.parse(t.out.departure.slice(0, 10))) / 864e5)
 
@@ -304,6 +335,7 @@ export function Results({ result }: { result: Result }) {
                     <td className="py-2 pr-4 font-medium whitespace-nowrap">{eur.format(f.price)}</td>
                     <td className="py-2 pr-4 whitespace-nowrap">
                       <Place code={f.origin} /> → <Place code={f.destination} />
+                      <Via f={f} />
                     </td>
                     <td className="py-2 pr-4 whitespace-nowrap text-muted">{when(f)}</td>
                     <td className="py-2 pr-4">
@@ -314,7 +346,7 @@ export function Results({ result }: { result: Result }) {
                       </span>
                     </td>
                     <td className="py-2 text-right">
-                      <Book url={f.url} />
+                      <Links f={f} />
                     </td>
                   </tr>
                 ))}
