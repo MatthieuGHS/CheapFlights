@@ -205,15 +205,16 @@ def _in_window(d: Deal, windows: list[Window], cfg: LastMinute) -> bool:
     )
 
 
-def _extra_cost(cfg: LastMinute, windows: int, aim: list[str]) -> int:
-    """Requêtes réservées à airBaltic et Kiwi : plafond airBaltic, et par plage, Kiwi n'importe
-    où (+ retours) ou aller et retour par cible."""
+def _extra_cost(cfg: LastMinute, windows: int, aim: list[str], slices: int) -> tuple[int, int]:
+    """Requêtes (airBaltic, Kiwi) : plafond airBaltic, et par plage, Kiwi n'importe où (+ retours)
+    ou aller et retour par cible ; le tout dans ce que le budget laisse après Ryanair."""
+    cap = max(cfg.request_budget - len(cfg.origins) * slices - RESERVE_STEP2, 0)
     ab = 0
     if cfg.airbaltic.enabled:
         routes = len(cfg.origins) * len(aim) if aim else cfg.airbaltic.requests
-        ab = min(cfg.airbaltic.requests, 1 + 2 * routes)
+        ab = min(cfg.airbaltic.requests, 1 + 2 * routes, cap)
     kiwi = windows * (2 * len(aim) if aim else 1 + cfg.kiwi.returns) if cfg.kiwi.enabled else 0
-    return ab + kiwi
+    return ab, min(kiwi, cap - ab)
 
 
 def _plan(
@@ -355,7 +356,8 @@ async def run(
     months = sorted({m for a, b in spans for m in _months(a, b)})
     aim = list(dict.fromkeys(cfg.destinations))  # vide : n'importe où
     pairs = [(o, t) for o in cfg.origins for t in aim if o != t]
-    extra = _extra_cost(cfg, len(windows), aim)
+    ab_budget, kiwi_limit = _extra_cost(cfg, len(windows), aim, len(ry_windows))
+    extra = ab_budget + kiwi_limit
     if aim:  # routes connues : prix jour par jour sur chacune, pas de découverte
         ry_pairs, wizz_routes, g_dests, g_dates = _plan_aimed(
             cfg, aim, len(pairs), len(months), charts, len(ry_windows), extra
@@ -449,11 +451,12 @@ async def run(
         call("wizzair", (lambda: wz_routes(pairs[:wizz_routes])) if aim else lambda: sources.wizz(
             cfg.origins, spans, wizz_routes, pause, rates)),
         call("google", google_job) if g_dests else _none(),
-        call("airbaltic", lambda: sources.airbaltic(
-            cfg.origins, aim, spans, cfg.airbaltic.requests, pause))
-        if cfg.airbaltic.enabled else _none(),
-        call("kiwi", lambda: sources.kiwi(cfg.origins, aim, spans, cfg.kiwi.returns, pause))
-        if cfg.kiwi.enabled else _none(),
+        call("airbaltic", lambda: sources.airbaltic(cfg.origins, aim, spans, ab_budget, pause))
+        if ab_budget else _none(),
+        call("kiwi", lambda: sources.kiwi(
+            cfg.origins, aim, [(w.start, w.last_out, w.end) for w in windows], cfg.kiwi.returns,
+            kiwi_limit, pause))
+        if kiwi_limit else _none(),
         web_all(),
     )  # fmt: skip
     if aim:  # les agrégateurs cherchent partout : on ne garde que les cibles
@@ -464,7 +467,10 @@ async def run(
         return any(w.contains(f.day) for w in windows)
 
     def wanted(f: Fare) -> bool:
-        return in_windows(f) and (not aim or f.destination in aim or f.origin in aim)
+        # cibles : l'aller vers une cible, le retour d'une cible vers la maison (une cible peut
+        # être une origine : ses vols vers ailleurs ne sont pas visés)
+        aimed = f.destination in aim or (f.origin in aim and f.destination in origins)
+        return in_windows(f) and (not aim or aimed)
 
     pool = [f for f in dedupe([*ry, *wz, *gg, *ab, *kw, *web_fares]) if wanted(f)]
 

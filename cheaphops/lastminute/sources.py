@@ -326,7 +326,11 @@ def airbaltic(
             if sent[0]:
                 pause()
             sent[0] += 1
-            data = json.loads(client.get(f"{AIRBALTIC}/api/{path}", params=params).text)
+            try:
+                data = json.loads(client.get(f"{AIRBALTIC}/api/{path}", params=params).text)
+            except Exception as e:  # bloqué, page d'erreur : cette requête seulement, comptée
+                log.info("airbaltic %s %s : %s", path, params, type(e).__name__)
+                return {}
             cache.put(data, "airbaltic", path, params)
         return data
 
@@ -334,7 +338,10 @@ def airbaltic(
         data = get("fsf/outbound", flightMode="oneway", origin=o, destin=d)
         return [f for f in parse_airbaltic(data, o, d) if any(a <= f.day <= b for a, b in spans)]
 
-    routes = airbaltic_routes(get("orig-dest/en"), origins, aim)
+    od = get("orig-dest/en")
+    if not od:
+        raise LookupError("airbaltic : liste des routes illisible")
+    routes = airbaltic_routes(od, origins, aim)
     room = budget - sent[0]
     outs = [f for o, d in routes[:room] for f in days(o, d)]
     cheapest = best_per_route(outs)[: max(budget - sent[0], 0)]
@@ -348,10 +355,13 @@ def airbaltic_routes(od: Any, origins: list[str], aim: list[str]) -> list[tuple[
     by_origin: dict[str, list[str]] = {o: [] for o in origins}
     for key, v in od["destinData"].items():
         d = key[:-1]  # « CPHA » : code + type (A : aéroport)
-        if not key.endswith("A") or d in origins or (aim and d not in aim):
+        # n'importe où : pas de vol entre deux origines ; cibles : seulement les cibles
+        if not key.endswith("A") or (d not in aim if aim else d in origins):
             continue
         for o in origins:
-            if (v["btDest"].get(o + "A") or v["nonBtDest"].get(o + "A") or {}).get("hasBTDirect"):
+            if o != d and (v["btDest"].get(o + "A") or v["nonBtDest"].get(o + "A") or {}).get(
+                "hasBTDirect"
+            ):
                 by_origin[o].append(d)
     rounds = zip_longest(*([(o, d) for d in ds] for o, ds in by_origin.items()))
     return [r for group in rounds for r in group if r]
@@ -398,12 +408,13 @@ KIWI_ONEWAY = (
 
 
 def kiwi(
-    origins: list[str], aim: list[str], spans: list[tuple[dt.date, dt.date]], returns: int,
-    pause: Pause,
+    origins: list[str], aim: list[str], windows: list[tuple[dt.date, dt.date, dt.date]],
+    returns: int, limit: int, pause: Pause,
 ) -> tuple[list[Fare], int]:  # fmt: skip
     """GraphQL de kiwi.com (sans jeton ni navigateur), prix indicatifs. Par plage : n'importe où,
     le moins cher par ville, puis le retour des `returns` destinations les moins chères ; en mode
-    cibles, aller et retour vers chaque cible. Ryanair et Wizz sont exclus : lus en direct."""
+    cibles, aller et retour vers chaque cible. Ryanair et Wizz sont exclus : lus en direct.
+    `windows` : (début, dernier départ, fin) ; au plus `limit` requêtes."""
     from primp import Client
 
     client, sent = Client(impersonate="chrome_145", impersonate_os="windows"), [0]
@@ -412,29 +423,37 @@ def kiwi(
         var = _kiwi_vars(src, dst, a, b)
         data = cache.get("kiwi", query, var)
         if data is None:
+            if sent[0] >= limit:
+                return []
             if sent[0]:
                 pause()
             sent[0] += 1
-            r = client.post(KIWI, json={"query": query, "variables": var},
-                            headers={"origin": "https://www.kiwi.com"})  # fmt: skip
-            data = json.loads(r.text)["data"]
-            cache.put(data, "kiwi", query, var)
-        node = next(iter(data.values()))
-        if "itineraries" not in node:  # AppError : cette requête seulement
-            log.info("kiwi %s -> %s : %s", src, dst, node.get("error"))
+            try:
+                r = client.post(KIWI, json={"query": query, "variables": var},
+                                headers={"origin": "https://www.kiwi.com"})  # fmt: skip
+                data = json.loads(r.text).get("data") or {}
+            except Exception as e:  # bloqué, page d'erreur : cette requête seulement, comptée
+                log.info("kiwi %s -> %s : %s", src, dst, type(e).__name__)
+                return []
+            if data:
+                cache.put(data, "kiwi", query, var)
+        node = next(iter(data.values()), None)
+        if not isinstance(node, dict) or "itineraries" not in node:  # AppError, erreurs GraphQL
+            log.info("kiwi %s -> %s : %s", src, dst, node and node.get("error"))
             return []
         return list(node["itineraries"])
 
     home = [f"Station:airport:{o}" for o in origins]
     fares: list[Fare] = []
-    for a, b in spans:
+    for a, last_out, b in windows:
         for t in aim:
             there = [f"Station:airport:{t}"]
-            fares += [parse_kiwi(x) for x in ask(KIWI_ONEWAY, home, there, a, b)]
+            fares += [parse_kiwi(x) for x in ask(KIWI_ONEWAY, home, there, a, last_out)]
             fares += [parse_kiwi(x) for x in ask(KIWI_ONEWAY, there, home, a, b)]
         if aim:
             continue
-        found = [parse_kiwi_city(x) for x in ask(KIWI_PER_CITY, home, ["anywhere"], a, b)]
+        # le moins cher par ville : cherché après le dernier départ, il serait écarté ensuite
+        found = [parse_kiwi_city(x) for x in ask(KIWI_PER_CITY, home, ["anywhere"], a, last_out)]
         fares += found
         dests = [f.destination for f in sorted(found, key=lambda f: f.price)
                  if f.destination not in origins]  # fmt: skip

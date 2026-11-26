@@ -176,10 +176,11 @@ def roundtrips(
         if weekend_cutoff is not None and not weekend_out(o):
             continue
         for b in backs_from.get(o.destination, []):
+            land = o.arrival or o.departure  # à défaut d'heure d'arrivée, le départ
             if not (
                 0 <= (b.day - o.day).days <= max_nights
-                # à défaut d'heure d'arrivée, compté depuis le départ
-                and (b.day > o.day or b.departure - (o.arrival or o.departure) >= SAME_DAY_GAP)
+                # un aller de nuit avec escale peut atterrir le lendemain
+                and (b.day > land.date() or b.departure - land >= SAME_DAY_GAP)
             ):
                 continue
             ok, check = (True, False) if weekend_cutoff is None else weekend_back(b, weekend_cutoff)

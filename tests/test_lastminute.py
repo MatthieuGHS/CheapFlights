@@ -24,6 +24,8 @@ from cheaphops.lastminute.fares import (
 from cheaphops.lastminute.fx import Fx
 
 FX = Fx({"PLN": Decimal("4.25")})
+# importées avant le bouchon hors réseau de conftest
+REAL_AIRBALTIC, REAL_KIWI = sources.airbaltic, sources.kiwi
 HOME = {"VNO", "KUN", "RIX"}
 
 
@@ -780,3 +782,84 @@ def test_run_pairs_airbaltic_with_kiwi_without_ryanair_returns(monkeypatch) -> N
         ("airbaltic", "kiwi", Decimal("71.99"))
     ]
     assert (r.sources["airbaltic"].requests, r.sources["kiwi"].requests) == (5, 2)
+
+
+def test_return_cannot_leave_before_an_overnight_outbound_lands() -> None:
+    out = replace(
+        fare("VNO", "AGP", "2026-12-01", "50", hour=20), arrival=datetime(2026, 12, 2, 14)
+    )
+    early = fare("AGP", "VNO", "2026-12-02", "20", hour=8)  # avant l'atterrissage
+    late = fare("AGP", "VNO", "2026-12-02", "20", hour=21)
+    assert [t.back for t in roundtrips([out], [early, late], 3, {})] == [late]
+
+
+def test_airbaltic_routes_aim_at_an_origin_from_the_other_origins() -> None:
+    od = {"destinData": {"RIXA": {"btDest": {"VNOA": {"hasBTDirect": True}}, "nonBtDest": {}}}}
+    assert sources.airbaltic_routes(od, ["VNO", "RIX"], ["RIX"]) == [("VNO", "RIX")]
+
+
+def test_airbaltic_and_kiwi_requests_fit_in_the_budget() -> None:
+    cfg = load_config().lastminute.model_copy(update={"request_budget": 80})
+    ab, kw = run_mod._extra_cost(cfg, windows=3, aim=[], slices=2)
+    assert ab + kw <= 80 - 3 * 2 - run_mod.RESERVE_STEP2
+
+
+class _Http:
+    """Client primp factice : une réponse texte par appel, dans l'ordre."""
+
+    def __init__(self, bodies: list[str]) -> None:
+        self.bodies = bodies
+
+    def __call__(self, **kw: object) -> "_Http":
+        return self
+
+    def _next(self, *a: object, **k: object) -> SimpleNamespace:
+        return SimpleNamespace(text=self.bodies.pop(0))
+
+    get = post = _next
+
+
+def test_blocked_requests_are_counted_and_keep_the_other_fares(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    import primp
+
+    od = {"destinData": {f"{d}A": {"btDest": {"RIXA": {"hasBTDirect": True}}, "nonBtDest": {}}
+                         for d in ("CPH", "ARN")}}  # fmt: skip
+    day = {"success": True, "data": [{"price": 40, "updatedPrice": None, "date": "2026-12-02"}]}
+    monkeypatch.setattr(primp, "Client", _Http([json.dumps(od), "<html>429</html>",
+                                                json.dumps(day), "<html>429</html>"]))  # fmt: skip
+    span = [(date(2026, 12, 1), date(2026, 12, 5))]
+    fares, sent = REAL_AIRBALTIC(["RIX"], [], span, 10, lambda: None)
+    assert sent == 4 and [(f.origin, f.destination) for f in fares] == [("RIX", "ARN")]
+
+    city = {"price": {"amount": "33"}, "source": {"station": {"code": "RIX", "city": {"slug": "r"}},
+            "localTime": "2026-12-02T16:55:00"}, "destination": {"station": {"code": "CPH",
+            "city": {"slug": "c"}}, "localTime": "2026-12-02T17:20:00"}}  # fmt: skip
+    per_city = {"data": {"onewayOnePerCityItineraries": {"itineraries": [city]}}}
+    monkeypatch.setattr(primp, "Client", _Http([json.dumps(per_city), "<html>403</html>"]))
+    window = [(date(2026, 12, 1), date(2026, 12, 3), date(2026, 12, 5))]
+    fares, sent = REAL_KIWI(["RIX"], [], window, returns=5, limit=2, pause=lambda: None)
+    assert sent == 2 and [f.destination for f in fares] == ["CPH"]
+
+
+def test_aiming_at_an_origin_keeps_only_trips_to_it(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    from cheaphops.core.config import with_overrides
+
+    cfg = with_overrides(load_config().lastminute, {
+        "pause_s": (0, 0), "days": 10, "origins": ["VNO", "RIX"], "destinations": ["RIX"],
+        "connections": False,
+    })  # fmt: skip
+    to_rix = fare("VNO", "RIX", "2026-11-22", "30", src="airbaltic")
+    rix_home = fare("RIX", "VNO", "2026-11-24", "30", src="airbaltic")
+    elsewhere = fare("RIX", "ARN", "2026-11-22", "10", src="airbaltic")  # part de la cible
+    elsewhere_back = fare("ARN", "RIX", "2026-11-24", "10", src="airbaltic")
+    found = [to_rix, rix_home, elsewhere, elsewhere_back]
+    monkeypatch.setattr(sources, "airbaltic", lambda *a: (found, 1))
+    monkeypatch.setattr(sources, "ryanair_calendar", lambda *a: ([], 1))
+    monkeypatch.setattr(sources, "wizz", lambda *a, **k: ([], 1))
+    monkeypatch.setattr(sources, "google", lambda *a: ([], 0))
+    monkeypatch.setattr(generic, "load_sources", lambda: [])
+    monkeypatch.setattr(run_mod, "Ryanair", lambda currency: SimpleNamespace(num_queries=0))
+    ground = Ground.model_validate({"home": "VNO", "buses": {}})
+
+    r = asyncio.run(run_mod.run(cfg, ground, date(2026, 11, 20), fx=FX))
+    assert [(t.out.destination, t.total) for t in r.periods[0].roundtrips] == [("RIX", Decimal(60))]
