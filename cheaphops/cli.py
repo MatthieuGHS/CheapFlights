@@ -3,12 +3,14 @@
 import argparse
 import asyncio
 import sys
-from datetime import date
+import uuid
+from datetime import date, datetime
 
 from pydantic import ValidationError
 
 from cheaphops.core.config import load_config, load_ground, with_overrides
 from cheaphops.core.log import setup_logging
+from cheaphops.lastminute import history
 from cheaphops.lastminute.fares import Fare, RoundTrip, best_per_route
 from cheaphops.lastminute.run import Result, run, windows_for
 
@@ -127,6 +129,7 @@ def main(argv: list[str] | None = None) -> int:
         ap.error(str(e))
     result = asyncio.run(run(lm, load_ground(), date.today(), lambda e: print(e, file=sys.stderr)))
     print(render(result, all_dates=args.all_dates))
+    print(f"Top 10 sauvé : {history.save(uuid.uuid4().hex[:12], datetime.now(), lm, result)}")
     return 0
 
 

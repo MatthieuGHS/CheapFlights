@@ -122,6 +122,22 @@ export const startSearch = (request: SearchRequest) =>
   call(z.object({ id: z.string() }), '/api/searches', { method: 'POST', body: JSON.stringify(request) })
 export const getSearch = (id: string) => call(Status, `/api/searches/${id}`)
 
+const HistoryEntry = z.object({
+  id: z.string(),
+  at: z.string(),
+  origins: z.array(z.string()),
+  days: z.number(),
+  periods: z.array(z.object({ start: z.string(), end: z.string() })),
+  weekend: z.boolean(),
+  best: z.number().nullable(),
+  count: z.number(),
+})
+export type HistoryEntry = z.infer<typeof HistoryEntry>
+const Saved = z.object({ id: z.string(), at: z.string(), result: Result })
+export type Saved = z.infer<typeof Saved>
+export const getHistory = () => call(z.array(HistoryEntry), '/api/history')
+export const getSaved = (id: string) => call(Saved, `/api/history/${encodeURIComponent(id)}`)
+
 /** Abonnement SSE ; renvoie la fonction de désabonnement. Une coupure devient un événement
  * `done` en erreur : l'UI ne reste jamais bloquée. */
 export function followSearch(id: string, onEvent: (e: SearchEvent) => void): () => void {

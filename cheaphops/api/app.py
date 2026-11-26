@@ -25,6 +25,7 @@ from cheaphops.core.config import (
     load_ground,
     with_overrides,
 )
+from cheaphops.lastminute import history
 from cheaphops.lastminute.run import Emit, Result, run, windows_for
 
 KEPT_RUNS = 20  # recherches gardées en mémoire, les plus anciennes oubliées
@@ -63,6 +64,7 @@ def create_app(
     ground_path: Path = ROOT / "ground.yaml",
     search: SearchFn = run,
     today: Callable[[], date] = date.today,
+    history_dir: Path = history.HISTORY,
 ) -> FastAPI:
     app = FastAPI(title="Cheap Hops")
     runs: dict[str, Run] = {}
@@ -70,6 +72,10 @@ def create_app(
     async def execute(r: Run) -> None:
         try:
             r.result = await search(r.params, load_ground(ground_path), today(), r.push)
+            try:  # l'historique ne doit pas faire échouer une recherche réussie
+                history.save(r.id, datetime.now(), r.params, r.result, history_dir)
+            except OSError:
+                log.exception("historique %s", r.id)
         except Exception as e:  # une recherche qui plante ne doit pas tuer le serveur
             log.exception("recherche %s", r.id)
             r.error = f"{type(e).__name__}: {e}"
@@ -114,6 +120,17 @@ def create_app(
         body: dict[str, Any] = jsonable_encoder(
             {"id": r.id, "done": r.done, "error": r.error, "params": r.params, "result": r.result}
         )
+        return body
+
+    @app.get("/api/history")
+    def history_list() -> list[dict[str, Any]]:
+        return history.entries(history_dir)
+
+    @app.get("/api/history/{run_id}")
+    def history_entry(run_id: str) -> dict[str, Any]:
+        body = history.load(run_id, history_dir)
+        if body is None:
+            raise HTTPException(404, "recherche absente de l'historique")
         return body
 
     @app.get("/api/searches/{run_id}/events")

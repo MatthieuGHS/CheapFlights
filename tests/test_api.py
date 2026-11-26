@@ -1,14 +1,17 @@
 import asyncio
-from datetime import date
+from datetime import date, datetime
+from decimal import Decimal
+from pathlib import Path
 
 from fastapi.testclient import TestClient
 
 from cheaphops.api.app import create_app
 from cheaphops.core.config import Ground, LastMinute
-from cheaphops.lastminute.run import Emit, Result
+from cheaphops.lastminute.fares import Bus, Fare, RoundTrip
+from cheaphops.lastminute.run import Emit, PeriodResult, Result
 
 
-def test_search_validates_runs_one_at_a_time_and_streams_until_done() -> None:
+def test_search_validates_runs_one_at_a_time_and_streams_until_done(tmp_path: Path) -> None:
     release = asyncio.Event()
     seen: list[LastMinute] = []
 
@@ -17,7 +20,7 @@ def test_search_validates_runs_one_at_a_time_and_streams_until_done() -> None:
         await release.wait()
         raise RuntimeError("source en panne")
 
-    with TestClient(create_app(search=search)) as c:
+    with TestClient(create_app(search=search, history_dir=tmp_path)) as c:
         assert c.post("/api/searches", json={"days": 100}).status_code == 422
         past = {"periods": [{"start": "2020-01-01", "end": "2020-01-03"}]}
         assert c.post("/api/searches", json=past).status_code == 422
@@ -32,3 +35,27 @@ def test_search_validates_runs_one_at_a_time_and_streams_until_done() -> None:
         assert (body["done"], body["error"]) == (True, "RuntimeError: source en panne")
         assert c.get("/api/searches/inconnu").status_code == 404
     assert (seen[0].days, seen[0].google.enabled, seen[0].origins) == (5, True, ["RIX"])
+
+
+def test_finished_search_keeps_its_top_10_on_disk(tmp_path: Path) -> None:
+    def leg(o: str, d: str, day: int, price: int) -> Fare:
+        when = datetime(2026, 12, day, 8)
+        return Fare("ryanair", "Ryanair", o, d, when, Decimal(price), None, f"https://r/{o}{d}")
+
+    no_bus = Bus(Decimal(0), 0)
+    trips = [RoundTrip(leg("VNO", f"D{i:02d}", 3, 20 + i), leg(f"D{i:02d}", "VNO", 5, 10), no_bus)
+             for i in range(12)]  # fmt: skip
+    period = PeriodResult(date(2026, 12, 2), date(2026, 12, 6), trips, {}, {})
+
+    async def search(cfg: LastMinute, ground: Ground, today: date, emit: Emit) -> Result:
+        return Result([t.out for t in trips], [period], [], {}, {"VNO": "Vilnius"}, 13, 1.0)
+
+    with TestClient(create_app(search=search, history_dir=tmp_path)) as c:
+        run_id = c.post("/api/searches", json={}).json()["id"]
+        c.get(f"/api/searches/{run_id}/events")
+        (entry,) = c.get("/api/history").json()
+        assert (entry["id"], entry["best"], entry["count"]) == (run_id, 30, 10)
+        saved = c.get(f"/api/history/{run_id}").json()["result"]
+        assert len(saved["periods"][0]["roundtrips"]) == len(saved["oneways"]) == 10
+        assert saved["periods"][0]["roundtrips"][0]["out"]["url"] == "https://r/VNOD00"
+        assert c.get("/api/history/..%2F..%2Fconfig").status_code == 404
