@@ -545,7 +545,7 @@ def test_periods_keep_both_legs_in_the_same_range_and_bound_return_searches(monk
         [("2026-11-25", "2026-11-26", Decimal(28))],
         [("2026-12-03", "2026-12-05", Decimal(39))],
     ]
-    assert (r.cities["VNO"], r.cities["BGY"]) == ("Vilnius", "Milan")
+    assert (r.cities["VNO"], r.cities["BGY"]) == ("Vilnius", "Bergame")
     vno = {(lo.isoformat(), hi.isoformat()) for a, lo, hi in asked if a == "VNO"}
     assert vno == {("2026-11-20", "2026-11-26"), ("2026-12-02", "2026-12-06")}  # rien entre
     bgy = sorted(hi.isoformat() for a, _lo, hi in asked if a == "BGY")
@@ -863,3 +863,18 @@ def test_aiming_at_an_origin_keeps_only_trips_to_it(monkeypatch) -> None:  # typ
 
     r = asyncio.run(run_mod.run(cfg, ground, date(2026, 11, 20), fx=FX))
     assert [(t.out.destination, t.total) for t in r.periods[0].roundtrips] == [("RIX", Decimal(60))]
+
+
+def test_airport_table_unreadable_means_no_names_and_no_rejection(tmp_path, monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    from cheaphops.lastminute import airports
+
+    bad = tmp_path / "airports.json"
+    bad.write_text("{pas du json")
+    monkeypatch.setattr(airports, "TABLE", bad)
+    for f in (airports.table, airports.cities):
+        f.cache_clear()
+    try:
+        assert airports.cities() == {} and airports.unknown(["XQZ"]) == []
+    finally:
+        for f in (airports.table, airports.cities):
+            f.cache_clear()

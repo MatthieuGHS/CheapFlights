@@ -10,7 +10,7 @@ from pydantic import ValidationError
 
 from cheaphops.core.config import load_config, load_ground, with_overrides
 from cheaphops.core.log import setup_logging
-from cheaphops.lastminute import history
+from cheaphops.lastminute import airports, history
 from cheaphops.lastminute.fares import Fare, RoundTrip, best_per_route
 from cheaphops.lastminute.run import Result, run, windows_for
 
@@ -130,6 +130,8 @@ def main(argv: list[str] | None = None) -> int:
         }  # fmt: skip
         lm = with_overrides(config.lastminute, {k: v for k, v in update.items() if v is not None})
         windows_for(lm, date.today())
+        if bad := airports.unknown([*lm.origins, *lm.destinations]):
+            raise ValueError(f"aéroport inconnu : {', '.join(bad)}")
     except (ValidationError, ValueError) as e:
         ap.error(str(e))
     result = asyncio.run(run(lm, load_ground(), date.today(), lambda e: print(e, file=sys.stderr)))

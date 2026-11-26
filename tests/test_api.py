@@ -24,6 +24,8 @@ def test_search_validates_runs_one_at_a_time_and_streams_until_done(tmp_path: Pa
         assert c.post("/api/searches", json={"days": 100}).status_code == 422
         past = {"periods": [{"start": "2020-01-01", "end": "2020-01-03"}]}
         assert c.post("/api/searches", json=past).status_code == 422
+        typo = c.post("/api/searches", json={"destinations": ["BGY", "XQZ"]})
+        assert (typo.status_code, typo.json()["detail"]) == (422, "aéroport inconnu : XQZ")
         r = c.post(
             "/api/searches", json={"days": 5, "google": True, "kiwi": False, "origins": ["RIX"]}
         )
@@ -62,3 +64,12 @@ def test_finished_search_keeps_its_top_10_on_disk(tmp_path: Path) -> None:
         assert len(saved["periods"][0]["roundtrips"]) == len(saved["oneways"]) == 10
         assert saved["periods"][0]["roundtrips"][0]["out"]["url"] == "https://r/VNOD00"
         assert c.get("/api/history/..%2F..%2Fconfig").status_code == 404
+
+
+def test_airport_table_is_served_compressed_with_french_city_names(tmp_path: Path) -> None:
+    with TestClient(create_app(history_dir=tmp_path)) as c:
+        r = c.get("/api/airports")
+    assert r.headers["content-encoding"] == "gzip"  # httpx décompresse : le corps est le JSON
+    table = {a["iata"]: a for a in r.json()}
+    assert (table["BGY"]["city"], table["BGY"]["country"]) == ("Bergame", "IT")
+    assert table["WMI"]["city"] == "Varsovie" and "Warsaw" in table["WMI"]["alt"]

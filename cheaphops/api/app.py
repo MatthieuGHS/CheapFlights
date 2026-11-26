@@ -13,7 +13,7 @@ from typing import Any
 
 from fastapi import FastAPI, HTTPException
 from fastapi.encoders import jsonable_encoder
-from fastapi.responses import StreamingResponse
+from fastapi.responses import Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ValidationError
 
@@ -25,7 +25,7 @@ from cheaphops.core.config import (
     load_ground,
     with_overrides,
 )
-from cheaphops.lastminute import history
+from cheaphops.lastminute import airports, history
 from cheaphops.lastminute.run import Emit, Result, run, windows_for
 
 KEPT_RUNS = 20  # recherches gardées en mémoire, les plus anciennes oubliées
@@ -87,6 +87,14 @@ def create_app(
             r.done = True
             r.push({"type": "done", "error": r.error})
 
+    @app.get("/api/airports")
+    def get_airports() -> Response:
+        return Response(
+            airports.table_gzip(),
+            media_type="application/json",
+            headers={"Content-Encoding": "gzip", "Cache-Control": "max-age=86400"},
+        )
+
     @app.get("/api/config")
     def get_config() -> dict[str, Any]:
         return jsonable_encoder(load_config(config_path).lastminute)  # type: ignore[no-any-return]
@@ -103,6 +111,8 @@ def create_app(
         try:
             params = with_overrides(base, update)
             windows_for(params, today())
+            if bad := airports.unknown([*params.origins, *params.destinations]):
+                raise ValueError(f"aéroport inconnu : {', '.join(bad)}")
         except ValidationError as e:
             raise HTTPException(422, json.loads(e.json())) from e
         except ValueError as e:
